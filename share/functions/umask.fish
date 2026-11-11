@@ -1,3 +1,5 @@
+# localization: tier1
+
 # Support the usual (i.e., bash compatible) `umask` UI. This reports or modifies the magic global
 # `umask` variable which is monitored by the fish process.
 
@@ -39,7 +41,8 @@ set __fish_umask_set_table 6 5 4 3 2 1 0
 function __fish_umask_set
     set -l to_set $argv[1]
     if test $to_set -eq 0
-        return 7
+        echo 7
+        return
     end
     echo $__fish_umask_set_table[$to_set]
 end
@@ -179,7 +182,10 @@ function umask --description "Set default file permission mask"
             return 1
 
         case '*'
-            printf (_ '%s: Too many arguments\n') umask >&2
+            {
+                printf (_ '%s: Too many arguments') umask
+                echo
+            } >&2
             return 1
     end
 end

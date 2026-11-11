@@ -1,10 +1,12 @@
-.. _cmd-fish_mode_prompt:
-
 fish_mode_prompt - define the appearance of the mode indicator
 ==============================================================
 
 Synopsis
 --------
+
+.. synopsis::
+
+    fish_mode_prompt
 
 ::
 
@@ -16,16 +18,18 @@ Synopsis
 Description
 -----------
 
-The ``fish_mode_prompt`` function outputs the mode indicator for use in vi-mode.
+The ``fish_mode_prompt`` function outputs the mode indicator for use in vi mode.
 
-The default ``fish_mode_prompt`` function will output indicators about the current Vi editor mode displayed to the left of the regular prompt. Define your own function to customize the appearance of the mode indicator. The ``$fish_bind_mode variable`` can be used to determine the current mode. It will be one of ``default``, ``insert``, ``replace_one``, or ``visual``.
+The default ``fish_mode_prompt`` function will output indicators about the current vi editor mode displayed to the left of the regular prompt. Define your own function to customize the appearance of the mode indicator. The ``$fish_bind_mode`` variable can be used to determine the current mode. It will be one of ``default``, ``insert``, ``replace_one``, ``replace``, ``visual``, or ``operator``.
 
-You can also define an empty ``fish_mode_prompt`` function to remove the Vi mode indicators::
+You can also define an empty ``fish_mode_prompt`` function to remove the vi mode indicators::
 
     function fish_mode_prompt; end
     funcsave fish_mode_prompt
 
-``fish_mode_prompt`` will be executed when the vi mode changes. If it produces any output, it is displayed and used. If it does not, the other prompt functions (:ref:`fish_prompt <cmd-fish_prompt>` and :ref:`fish_right_prompt <cmd-fish_right_prompt>`) will be executed as well in case they contain a mode display.
+``fish_mode_prompt`` will be executed when the vi mode changes. If it produces any output, it is displayed and used. If it does not, the other prompt functions (:doc:`fish_prompt <fish_prompt>` and :doc:`fish_right_prompt <fish_right_prompt>`) will be executed as well in case they contain a mode display.
+
+If :envvar:`fish_transient_prompt` is set to 1, ``fish_mode_prompt --final-rendering`` is run before executing the commandline.
 
 Example
 -------
@@ -45,14 +49,20 @@ Example
         case replace_one
           set_color --bold green
           echo 'R'
+        case replace
+          set_color --bold bryellow
+          echo 'R'
         case visual
           set_color --bold brmagenta
           echo 'V'
+        case operator f F t T
+          set_color --bold cyan
+          echo 'N'
         case '*'
           set_color --bold red
           echo '?'
       end
-      set_color normal
+      set_color --reset
     end
 
 

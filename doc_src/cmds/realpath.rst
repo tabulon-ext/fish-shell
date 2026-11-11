@@ -1,14 +1,12 @@
-.. _cmd-realpath:
-
 realpath - convert a path to an absolute path without symlinks
 ==============================================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    realpath PATH
+    realpath [OPTIONS] PATH
 
 Description
 -----------
@@ -16,15 +14,17 @@ Description
 .. only:: builder_man
 
           NOTE: This page documents the fish builtin ``realpath``.
-          To see the documentation on the ``realpath`` command you might have,
-          use ``command man realpath``.
+          To see the documentation on any non-fish versions, use ``command man realpath``.
 
-``realpath`` resolves a path to its absolute path.
+:program:`realpath` follows all symbolic links encountered for the provided :envvar:`PATH`, printing the absolute path resolved. :doc:`fish <fish>` provides a :command:`realpath`-alike builtin intended to enrich systems where no such command is installed by default.
 
-fish provides a ``realpath`` builtin as a fallback for systems where there is no ``realpath`` command, your OS might provide a version with more features.
-
-If a ``realpath`` command exists, it will be preferred, so if you want to use the builtin you should use ``builtin realpath`` explicitly.
+If a :command:`realpath` command exists, that will be preferred.
+``builtin realpath`` will explicitly use the fish implementation of :command:`realpath`.
 
 The following options are available:
 
-- ``-s`` or ``--no-symlinks``: Don't resolve symlinks, only make paths absolute, squash multiple slashes and remove trailing slashes.
+**-s** or **--no-symlinks**
+    Don't resolve symlinks, only make paths absolute, squash multiple slashes and remove trailing slashes.
+
+**-h** or **--help**
+    Displays help about using this command.

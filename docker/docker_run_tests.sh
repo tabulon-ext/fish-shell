@@ -1,22 +1,19 @@
-#!/bin/bash
+#!/bin/sh
 
 usage() {
     cat << EOF
-Usage: $(basename $0) [--shell-before] [--shell-after] DOCKERFILE
+Usage: $(basename "$0") [--shell-before] [--shell-after] DOCKERFILE
 Options:
-    --shell-before   Before the tests start, run a bash shell
-    --shell-after    After the tests end, run a bash shell
+    --shell-before    Before the tests start, run a bash shell
+    --shell-after     After the tests end, run a bash shell
+    --lint, --no-lint Enable/disable linting and failure on warnings
 EOF
     exit 1
 }
 
-DOCKER_EXTRA_ARGS=""
-
-# Exit on failure.
 set -e
 
-# Get fish source directory.
-FISH_SRC_DIR=$(cd "$( dirname "${BASH_SOURCE[0]}" )"/.. >/dev/null && pwd)
+DOCKER_EXTRA_ARGS=""
 
 # Parse args.
 while [ $# -gt 1 ]; do
@@ -27,6 +24,12 @@ while [ $# -gt 1 ]; do
         --shell-after)
             DOCKER_EXTRA_ARGS="$DOCKER_EXTRA_ARGS --env FISH_RUN_SHELL_AFTER_TESTS=1"
             ;;
+        --lint)
+            DOCKER_EXTRA_ARGS="$DOCKER_EXTRA_ARGS --env FISH_CHECK_LINT=true"
+            ;;
+        --no-lint)
+            DOCKER_EXTRA_ARGS="$DOCKER_EXTRA_ARGS --env FISH_CHECK_LINT=false"
+            ;;
         *)
             usage
             ;;
@@ -34,18 +37,19 @@ while [ $# -gt 1 ]; do
     shift
 done
 
-DOCKERFILE=${@:$OPTIND:1}
-test -n "$DOCKERFILE" || usage
+dockerfile=$1
+test -n "$dockerfile" || usage
 
-# Construct a docker image.
-IMG_TAGNAME="fish_$(basename -s .Dockerfile "$DOCKERFILE")"
-docker build \
-    -t "$IMG_TAGNAME" \
-    -f "$DOCKERFILE" \
-    "$FISH_SRC_DIR"/docker/context/
+workspace_root=$(cd "$( dirname "$0" )"/.. >/dev/null && pwd)
+
+. "$workspace_root"/docker/lib.sh
+
+docker_build "$dockerfile"
 
 # Run tests in it, allowing them to fail without failing this script.
-docker run -it \
-    --mount type=bind,source="$FISH_SRC_DIR",target=/fish-source,readonly \
+# shellcheck disable=SC2046  # for the -t snippet
+# shellcheck disable=SC2086  # $DOCKER_EXTRA_ARGS should have globbing and splitting applied.
+docker run -i $([ -t 0 ] && printf %s -t) \
+    --mount type=bind,source="$workspace_root",target=/fish-source,readonly \
     $DOCKER_EXTRA_ARGS \
-    "$IMG_TAGNAME"
+    "$(image_tagname "$dockerfile")"

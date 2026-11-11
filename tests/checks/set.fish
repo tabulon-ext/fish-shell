@@ -1,4 +1,4 @@
-# RUN: env XDG_CONFIG_HOME="$(mktemp -d)" FISH=%fish %fish %s
+# RUN: env FISH=%fish %fish %s
 # Environment variable tests
 
 # Test if variables can be properly set
@@ -49,7 +49,6 @@ else
 end
 # CHECK: Test 4 pass
 
-
 #Test that scope is preserved when setting a new value
 
 set t5 a
@@ -78,7 +77,6 @@ for i in 1
     end
 end
 # CHECK: Test 6 pass
-
 
 # Test if variables in for loop blocks do not go out of scope on new laps
 
@@ -345,27 +343,29 @@ or echo testu undef in top level shell
 $FISH -c 'set -q testu; or echo testu undef in sub shell'
 # CHECK: testu undef in sub shell
 
-# test SHLVL
-# use a subshell to ensure a clean slate
-env SHLVL= $FISH -ic 'echo SHLVL: $SHLVL; $FISH -ic \'echo SHLVL: $SHLVL\''
-# CHECK: SHLVL: 1
-# CHECK: SHLVL: 2
+begin
+    # test SHLVL
+    # use a subshell to ensure a clean slate
+    env SHLVL= $FISH -ic 'echo SHLVL: $SHLVL; $FISH -ic \'echo SHLVL: $SHLVL\''
+    # CHECK: SHLVL: 1
+    # CHECK: SHLVL: 2
 
-# exec should decrement SHLVL - outer fish increments by 1, decrements for exec,
-# inner fish increments again so the value stays the same.
-env SHLVL=1 $FISH -ic 'echo SHLVL: $SHLVL; exec $FISH -ic \'echo SHLVL: $SHLVL\''
-# CHECK: SHLVL: 2
-# CHECK: SHLVL: 2
+    # exec should decrement SHLVL - outer fish increments by 1, decrements for exec,
+    # inner fish increments again so the value stays the same.
+    env SHLVL=1 $FISH -ic 'echo SHLVL: $SHLVL; exec $FISH -ic \'echo SHLVL: $SHLVL\''
+    # CHECK: SHLVL: 2
+    # CHECK: SHLVL: 2
 
-# garbage SHLVLs should be treated as garbage
-env SHLVL=3foo $FISH -ic 'echo SHLVL: $SHLVL'
-# CHECK: SHLVL: 1
+    # garbage SHLVLs should be treated as garbage
+    env SHLVL=3foo $FISH -ic 'echo SHLVL: $SHLVL'
+    # CHECK: SHLVL: 1
 
-# whitespace is allowed though (for bash compatibility)
-env SHLVL="3  " $FISH -ic 'echo SHLVL: $SHLVL'
-env SHLVL="  3" $FISH -ic 'echo SHLVL: $SHLVL'
-# CHECK: SHLVL: 4
-# CHECK: SHLVL: 4
+    # whitespace is allowed though (for bash compatibility)
+    env SHLVL="3  " $FISH -ic 'echo SHLVL: $SHLVL'
+    env SHLVL="  3" $FISH -ic 'echo SHLVL: $SHLVL'
+    # CHECK: SHLVL: 4
+    # CHECK: SHLVL: 4
+end
 
 # Non-interactive fish doesn't touch $SHLVL
 env SHLVL=2 $FISH -c 'echo SHLVL: $SHLVL'
@@ -403,7 +403,6 @@ set -x DONT_ESCAPE_COLONS_PATH 1: 2: :3:
 env | grep '^DONT_ESCAPE_COLONS_PATH='
 # CHECK: DONT_ESCAPE_COLONS_PATH=1::2:::3:
 
-
 # Path universal variables
 set -U __fish_test_path_not a b c
 set -U __fish_test_PATH 1 2 3
@@ -414,9 +413,29 @@ set --unpath __fish_test_PATH $__fish_test_PATH
 echo "$__fish_test_path_not $__fish_test_PATH" $__fish_test_path_not $__fish_test_PATH
 # CHECK: a b c 1 2 3 a b c 1 2 3
 
+set -q --path __fish_test_PATH
+and echo __fish_test_PATH is a pathvar
+or echo __fish_test_PATH is not a pathvar
+# CHECK: __fish_test_PATH is not a pathvar
+
+set -q --unpath __fish_test_PATH
+and echo __fish_test_PATH is not a pathvar
+or echo __fish_test_PATH is not not a pathvar
+# CHECK: __fish_test_PATH is not a pathvar
+
 set --path __fish_test_path_not $__fish_test_path_not
 echo "$__fish_test_path_not $__fish_test_PATH" $__fish_test_path_not $__fish_test_PATH
 # CHECK: a:b:c 1 2 3 a b c 1 2 3
+
+set -q --path __fish_test_path_not
+and echo __fish_test_path_not is a pathvar
+or echo __fish_test_path_not is not a pathvar
+# CHECK: __fish_test_path_not is a pathvar
+
+set -q --unpath __fish_test_path_not
+and echo __fish_test_path_not is not a pathvar
+or echo __fish_test_path_not is not not a pathvar
+# CHECK: __fish_test_path_not is not not a pathvar
 
 set --path __fish_test_PATH $__fish_test_PATH
 echo "$__fish_test_path_not $__fish_test_PATH" $__fish_test_path_not $__fish_test_PATH
@@ -450,11 +469,9 @@ env | grep __fish_empty_uvar
 for a,b in y 1 z 3
     echo $a,$b
 end
-# CHECKERR: {{.*}} for: Variable name 'a,b' is not valid. See `help identifiers`.
-# CHECKERR:
-# CHECKERR: for a,b in y 1 z 3
-# CHECKERR:     ^
-
+# CHECKERR: {{.*}} for: a,b: invalid variable name. See `help language#shell-variable-and-function-names`
+# CHECKERR: {{^}}for a,b in y 1 z 3
+# CHECKERR: {{^}}    ^~^
 
 # Global vs Universal Unspecified Scopes
 set -U __fish_test_global_vs_universal universal
@@ -464,7 +481,6 @@ echo "global-vs-universal 1: $__fish_test_global_vs_universal"
 set -g __fish_test_global_vs_universal global
 echo "global-vs-universal 2: $__fish_test_global_vs_universal"
 # CHECK: global-vs-universal 2: global
-
 
 set __fish_test_global_vs_universal global2
 echo "global-vs-universal 3: $__fish_test_global_vs_universal"
@@ -476,7 +492,7 @@ echo "global-vs-universal 4: $__fish_test_global_vs_universal"
 
 set -e -U __fish_test_global_vs_universal
 echo "global-vs-universal 5: $__fish_test_global_vs_universal"
-# CHECK: global-vs-universal 5: 
+# CHECK: global-vs-universal 5:
 
 # Export local variables from all parent scopes (issue #6153).
 function func
@@ -507,15 +523,22 @@ $FISH -c 'set -S EDITOR' | string match -r -e 'global|universal'
 # When the variable has been changed outside of fish we accept it.
 # CHECK: $EDITOR: set in global scope, exported, with 1 elements
 # CHECK: $EDITOR: set in universal scope, exported, with 2 elements
-sh -c "EDITOR='vim -g' $FISH -c "'\'set -S EDITOR\'' | string match -r -e 'global|universal'
+sh -c 'EDITOR=vim "$@" -c "set -S EDITOR"' uselessargument $FISH | string match -r -e 'global|universal'
 
 # Verify behavior of `set --show` given an invalid var name
 set --show 'argle bargle'
-#CHECKERR: set: Variable name 'argle bargle' is not valid. See `help identifiers`.
+#CHECKERR: set: argle bargle: invalid variable name. See `help language#shell-variable-and-function-names`
 #CHECKERR: {{.*}}set.fish (line {{\d+}}):
-#CHECKERR: set --show 'argle bargle'
-#CHECKERR: ^
+#CHECKERR: {{^}}set --show 'argle bargle'
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help set' for related documentation)
+
+set --show array[1]
+# CHECKERR: set: `set --show` does not allow slices with the var names
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set --show array[1]
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
 
 # Verify behavior of `set --show`
 set semiempty ''
@@ -534,7 +557,7 @@ set --show var1
 #CHECK: $var1: set in local scope, unexported, with 0 elements
 #CHECK: $var1: set in global scope, unexported, with 2 elements
 #CHECK: $var1[1]: |goodbye|
-#CHECK: $var1[2]: |and don\'t come back|
+#CHECK: $var1[2]: |and don't come back|
 #CHECK: $var1: set in universal scope, unexported, with 1 elements
 #CHECK: $var1[1]: |hello|
 
@@ -602,6 +625,32 @@ set --show var5
 #CHECK: $var5[7]: |x|
 #CHECK: $var5[8]: |0|
 
+set -a
+# CHECKERR: set: expected >= 1 arguments; got 0
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -a
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+set -p
+# CHECKERR: set: expected >= 1 arguments; got 0
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -p
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -a foo[1]
+# CHECKERR: set: Cannot use --append or --prepend when assigning to a slice
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -a foo[1]
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+set -p foo[1]
+# CHECKERR: set: Cannot use --append or --prepend when assigning to a slice
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -p foo[1]
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
 # Setting local scope when no local scope of the var uses the closest scope
 set -g var6 ghi jkl
 begin
@@ -616,6 +665,34 @@ end
 #CHECK: $var6[1]: |ghi|
 #CHECK: $var6[2]: |jkl|
 
+# `and` creates no new scope on its own
+true; and set -l var7a 89 179
+set -q var7a
+echo $status
+#CHECK: 0
+
+# `begin` of an `and` creates a new scope
+true; and begin
+    set -l var7b 359 719
+end
+set -q var7b
+echo $status
+#CHECK: 1
+
+# `or` creates no new scope on its own
+false; or set -l var8a 1439 2879
+set -q var8a
+echo $status
+#CHECK: 0
+
+# `begin` of an `or` creates a new scope
+false; or begin
+    set -l var8b 9091 9901
+end
+set -q var8b
+echo $status
+#CHECK: 1
+
 # Exporting works
 set -x TESTVAR0
 set -x TESTVAR1 a
@@ -624,6 +701,19 @@ env | grep TESTVAR | sort | cat -v
 #CHECK: TESTVAR0=
 #CHECK: TESTVAR1=a
 #CHECK: TESTVAR2=a b
+
+set -x | grep TESTVAR | sort | cat -v
+#CHECK: TESTVAR0
+#CHECK: TESTVAR1 a
+#CHECK: TESTVAR2 'a' 'b'
+
+set -u TESTVAR0
+set -u TESTVAR2 a b
+set -u | grep TESTVAR | sort | cat -v
+#CHECK: TESTVAR0
+#CHECK: TESTVAR2 'a' 'b'
+set -x | grep TESTVAR | sort | cat -v
+#CHECK: TESTVAR1 a
 
 # if/for/while scope
 function test_ifforwhile_scope
@@ -652,6 +742,9 @@ test_ifforwhile_scope
 set -g status 5
 #CHECKERR: set: Tried to change the read-only variable 'status'
 
+status=5 version=123 echo launch-missiles
+#CHECKERR: fish: Tried to modify the special variable 'status' with the wrong scope
+
 while set -e __fish_test_universal_exported_var
 end
 set -xU __fish_test_universal_exported_var 1
@@ -663,15 +756,14 @@ env | string match -e __fish_test_universal_exported_var
 # If they can be set they can only be set in global scope,
 # so they should only be shown in global scope.
 set -S status
-#CHECK: $status: set in global scope, unexported, with 1 elements
-#CHECK: Variable is read-only
+#CHECK: $status: set in global scope, unexported, with 1 elements (read-only)
 #CHECK: $status[1]: |0|
 
 # PWD is also read-only.
 set -S PWD
-#CHECK: $PWD: set in global scope, exported, with 1 elements
-#CHECK: Variable is read-only
+#CHECK: $PWD: set in global scope, exported, with 1 elements (read-only)
 #CHECK: $PWD[1]: |{{.*}}|
+#CHECK: $PWD: originally inherited as |{{.*}}|
 
 set -ql history
 echo $status
@@ -700,7 +792,6 @@ echo $foo
 echo $bar
 #CHECK: 1 3
 
-
 # Test that `set -q` does not return 0 if there are 256 missing variables
 
 set -lq a(seq 1 256)
@@ -710,19 +801,26 @@ echo $status
 true
 
 set "" foo
-#CHECKERR: set: Variable name '' is not valid. See `help identifiers`.
-#CHECKERR: {{.*}}set.fish (line {{\d+}}): 
-#CHECKERR: set "" foo
-#CHECKERR: ^
+#CHECKERR: set: : invalid variable name. See `help language#shell-variable-and-function-names`
+#CHECKERR: {{.*}}set.fish (line {{\d+}}):
+#CHECKERR: {{^}}set "" foo
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help set' for related documentation)
 
 set --show ""
-#CHECKERR: set: Variable name '' is not valid. See `help identifiers`.
-#CHECKERR: {{.*}}set.fish (line {{\d+}}): 
-#CHECKERR: set --show ""
-#CHECKERR: ^
+#CHECKERR: set: : invalid variable name. See `help language#shell-variable-and-function-names`
+#CHECKERR: {{.*}}set.fish (line {{\d+}}):
+#CHECKERR: {{^}}set --show ""
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help set' for related documentation)
 
+set foo="ba nana"
+#CHECKERR: set: foo=ba nana: invalid variable name. See `help language#shell-variable-and-function-names`
+#CHECKERR: set: Did you mean `set foo 'ba nana'`?
+#CHECKERR: {{.*}}set.fish (line {{\d+}}):
+#CHECKERR: {{^}}set foo="ba nana"
+#CHECKERR: {{^}}^
+#CHECKERR: (Type 'help set' for related documentation)
 # Test path splitting
 begin
     set -l PATH /usr/local/bin:/usr/bin
@@ -755,14 +853,14 @@ set -S stilllocal
 set -g globalvar global
 
 function test-function-scope
-    set -f funcvar "function"
+    set -f funcvar function
     echo $funcvar
     # CHECK: function
     set -S funcvar
     #CHECK: $funcvar: set in local scope, unexported, with 1 elements
     #CHECK: $funcvar[1]: |function|
     begin
-        set -l funcvar "block"
+        set -l funcvar block
         echo $funcvar
         # CHECK: block
         set -S funcvar
@@ -802,7 +900,7 @@ function test-function-scope
     #CHECK: $globalvar: set in global scope, unexported, with 1 elements
     #CHECK: $globalvar[1]: |global|
 end
-        
+
 test-function-scope
 echo $funcvar $funcvar2
 # CHECK:
@@ -821,6 +919,29 @@ end
 
 erase-funcvar
 
+set -f foo
+set -l banana
+set -g global
+begin
+    set -qf foo
+    and echo foo is function scoped
+    # CHECK: foo is function scoped
+
+    set -l localvar414
+    set -qf localvar414
+    or echo localvar414 is not function scoped
+    # CHECK: localvar414 is not function scoped
+
+    set -qf banana
+    and echo banana is function scoped
+    # CHECK: banana is function scoped
+
+    set -l global
+    set -qf global
+    or echo global is not function scoped
+    # CHECK: global is not function scoped
+end
+
 set --query $this_is_not_set
 echo $status
 # CHECK: 255
@@ -828,3 +949,219 @@ echo $status
 set --query
 echo $status
 # CHECK: 255
+
+set -U status
+# CHECKERR: set: Tried to modify the special variable 'status' with the wrong scope
+set -S status
+# CHECK: $status: set in global scope, unexported, with 1 elements (read-only)
+# CHECK: $status[1]: |2|
+
+# See that we show inherited variables correctly:
+foo=bar $FISH -c 'set foo 1 2 3; set --show foo'
+# CHECK: $foo: set in global scope, exported, with 3 elements
+# CHECK: $foo[1]: |1|
+# CHECK: $foo[2]: |2|
+# CHECK: $foo[3]: |3|
+# CHECK: $foo: originally inherited as |bar|
+
+# Verify behavior of erasing in multiple scopes simultaneously
+set -U marbles global
+set -g marbles global
+set -l marbles local
+
+set -eUg marbles
+set -ql marbles || echo "erased in more scopes than it should!"
+set -qg marbles && echo "didn't erase from global scope!"
+set -qU marbles && echo "didn't erase from universal scope!"
+
+begin
+    set -l secret local 4 8 15 16 23 42
+    set -g secret global 4 8 15 16 23 42
+    set -egl secret[3..5]
+    echo $secret
+    # CHECK: local 4 23 42
+end
+echo $secret
+# CHECK: global 4 23 42
+
+set -e
+# CHECKERR: set: --erase: option requires an argument
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -e
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+while set -e undefined
+end
+
+set -e undefined[x..]
+# CHECKERR: set: Invalid index starting at 'x..]'
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -e undefined[x..]
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -e undefined[..y]
+# CHECKERR: set: Invalid index starting at 'y]'
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -e undefined[..y]
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -e undefined[1..]
+set -e undefined[..]
+set -e undefined[..1]
+
+set -l negative_oob 1 2 3
+set -q negative_oob[-10..1]
+
+set foo[1 2 3] a b
+# CHECKERR: set: given 3 indexes but 2 values
+set foo[1 2 3] a b c d
+# CHECKERR: set: given 3 indexes but 4 values
+
+# --no-event
+
+function onevent --on-variable nonevent
+    echo ONEVENT $argv $nonevent
+end
+
+set -g nonevent bar
+set -e nonevent
+
+# CHECK: ONEVENT VARIABLE SET nonevent bar
+# CHECK: ONEVENT VARIABLE ERASE nonevent
+
+set -g --no-event nonevent 2
+set -e --no-event nonevent
+set -S nonevent
+
+set -g --no-event nonevent 3
+set -e nonevent
+# CHECK: ONEVENT VARIABLE ERASE nonevent
+
+set -g nonevent 4
+# CHECK: ONEVENT VARIABLE SET nonevent 4
+set -e --no-event nonevent
+
+set -l nonevent 4
+set -e nonevent
+# CHECK: ONEVENT VARIABLE SET nonevent
+# CHECK: ONEVENT VARIABLE ERASE nonevent
+
+mkdir -p empty
+env XDG_CONFIG_HOME= HOME=$PWD/empty LC_ALL=en_US.UTF-8 $FISH -c 'set -Ux LC_ALL en_US.UTF-8'
+env XDG_CONFIG_HOME= HOME=$PWD/empty LC_ALL=en_US.UTF-8 $FISH -c 'set -S LC_ALL'
+# CHECK: $LC_ALL: set in universal scope, exported, with 1 elements
+# CHECK: $LC_ALL[1]: |en_US.UTF-8|
+# CHECK: $LC_ALL: originally inherited as |en_US.UTF-8|
+
+# This used to crash
+set line[0] ""
+# CHECKERR: set: array index out of bounds
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set line[0] ""
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+echo Still here
+# CHECK: Still here
+
+set -o xtrace
+# CHECKERR: fish does not have shell options. See `help fish_for_bash_users`.
+# CHECKERR: set: -o: unknown option
+
+set -o vi
+# CHECKERR: fish does not have shell options. See `help fish_for_bash_users`.
+# CHECKERR: To enable vi-mode, run `fish_vi_key_bindings`.
+# CHECKERR: set: -o: unknown option
+
+set -o ed
+# CHECKERR: fish does not have shell options. See `help fish_for_bash_users`.
+# CHECKERR: ?
+# CHECKERR: ?
+# CHECKERR: ?
+# CHECKERR: set: -o: unknown option
+
+set -q -e foo
+# CHECKERR: set: invalid option combination
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -q -e foo
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -q -n
+# CHECKERR: set: invalid option combination
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -q -n
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -e -n
+# CHECKERR: set: invalid option combination
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -e -n
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -l -g foo bar
+# CHECKERR: set: scope can be only one of: universal function global local
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -l -g foo bar
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -u -x foo
+# CHECKERR: set: cannot both export and unexport
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -u -x foo
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -e -x foo
+# CHECKERR: set: invalid option combination
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -e -x foo
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -e -u foo
+# CHECKERR: set: invalid option combination
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -e -u foo
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set --path --unpath foo
+# CHECKERR: set: cannot both path and unpath
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set --path --unpath foo
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -s -l
+# CHECKERR: set: invalid option combination
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: {{^}}set -s -l
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set umask abc
+# CHECKERR: set: Tried to modify the special variable 'umask' to an invalid value
+
+# Almost all electric variables are read-only.
+set -e FISH_VERSION
+echo $status
+# CHECKERR: set: Tried to change the read-only variable 'FISH_VERSION'
+# CHECK: 1
+set -e status
+echo $status
+# CHECKERR: set: Tried to change the read-only variable 'status'
+# CHECK: 1
+
+# This is the only electric variable that's read-write. Could add a better error here.
+set -e umask
+echo $status
+# CHECK: 4
+
+exit 0

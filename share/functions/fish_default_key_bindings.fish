@@ -1,4 +1,4 @@
-function fish_default_key_bindings -d "Default (Emacs-like) key bindings for fish"
+function fish_default_key_bindings -d "emacs-like key binds"
     if contains -- -h $argv
         or contains -- --help $argv
         echo "Sorry but this function doesn't support -h or --help"
@@ -8,113 +8,57 @@ function fish_default_key_bindings -d "Default (Emacs-like) key bindings for fis
     if not set -q argv[1]
         bind --erase --all --preset # clear earlier bindings, if any
         if test "$fish_key_bindings" != fish_default_key_bindings
-            # Allow the user to set the variable universally
-            set -q fish_key_bindings
-            or set -g fish_key_bindings
-            # This triggers the handler, which calls us again and ensures the user_key_bindings
-            # are executed.
-            set fish_key_bindings fish_default_key_bindings
-            return
+            __fish_change_key_bindings fish_default_key_bindings
+            set fish_bind_mode default
         end
     end
 
-    # Silence warnings about unavailable keys. See #4431, 4188
-    if not contains -- -s $argv
-        set argv -s $argv
-    end
-
     # These are shell-specific bindings that we share with vi mode.
-    __fish_shared_key_bindings $argv
+    eval "$(__fish_shared_key_bindings)" $argv
     or return # protect against invalid $argv
 
-    # This is the default binding, i.e. the one used if no other binding matches
-    bind --preset $argv "" self-insert
-    or exit # protect against invalid $argv
+    bind --preset $argv right forward-char
+    bind --preset $argv left backward-char
 
-    # Space and other command terminators expands abbrs _and_ inserts itself.
-    bind --preset $argv " " self-insert expand-abbr
-    bind --preset $argv ";" self-insert expand-abbr
-    bind --preset $argv "|" self-insert expand-abbr
-    bind --preset $argv "&" self-insert expand-abbr
-    bind --preset $argv "^" self-insert expand-abbr
-    bind --preset $argv ">" self-insert expand-abbr
-    bind --preset $argv "<" self-insert expand-abbr
-    # Closing a command substitution expands abbreviations
-    bind --preset $argv ")" self-insert expand-abbr
-    # Ctrl-space inserts space without expanding abbrs
-    bind --preset $argv -k nul 'commandline -i " "'
+    bind --preset $argv delete delete-char
+    bind --preset $argv backspace backward-delete-char
+    bind --preset $argv shift-backspace backward-delete-char
 
+    bind --preset $argv home beginning-of-line
+    bind --preset $argv end end-of-line
 
-    bind --preset $argv \n execute
-    bind --preset $argv \r execute
+    bind --preset $argv ctrl-a beginning-of-line
+    bind --preset $argv ctrl-e end-of-line
+    bind --preset $argv ctrl-h backward-delete-char
+    bind --preset $argv ctrl-p up-or-search
+    bind --preset $argv ctrl-n down-or-search
+    bind --preset $argv ctrl-f forward-char
+    bind --preset $argv ctrl-b backward-char
+    bind --preset $argv ctrl-t transpose-chars
+    bind --preset $argv ctrl-g cancel
+    bind --preset $argv ctrl-/ undo
+    bind --preset $argv ctrl-_ undo # XTerm idiosyncracy, can get rid of this once we go full CSI u
+    bind --preset $argv ctrl-z undo
+    bind --preset $argv ctrl-shift-z redo
+    bind --preset $argv alt-/ redo
+    bind --preset $argv alt-t transpose-words
+    bind --preset $argv alt-u upcase-word
 
-    bind --preset $argv \ck kill-line
+    bind --preset $argv alt-c capitalize-word
 
-    bind --preset $argv \eOC forward-char
-    bind --preset $argv \eOD backward-char
-    bind --preset $argv \e\[C forward-char
-    bind --preset $argv \e\[D backward-char
-    bind --preset $argv -k right forward-char
-    bind --preset $argv -k left backward-char
+    bind --preset $argv alt-backspace backward-kill-word
+    bind --preset $argv ctrl-alt-h backward-kill-word
+    bind --preset $argv ctrl-backspace backward-kill-token
+    bind --preset $argv alt-delete kill-word
+    bind --preset $argv ctrl-delete kill-token
 
-    bind --preset $argv -k dc delete-char
-    bind --preset $argv -k backspace backward-delete-char
-    bind --preset $argv \x7f backward-delete-char
+    bind --preset $argv alt-\< beginning-of-buffer
+    bind --preset $argv alt-\> end-of-buffer
 
-    # for PuTTY
-    # https://github.com/fish-shell/fish-shell/issues/180
-    bind --preset $argv \e\[1~ beginning-of-line
-    bind --preset $argv \e\[3~ delete-char
-    bind --preset $argv \e\[4~ end-of-line
+    bind --preset $argv ctrl-r history-pager
 
-    bind --preset $argv -k home beginning-of-line
-    bind --preset $argv -k end end-of-line
-    bind --preset $argv \e\[3\;2~ backward-delete-char # Mavericks Terminal.app shift-ctrl-delete
-
-    bind --preset $argv \ca beginning-of-line
-    bind --preset $argv \ce end-of-line
-    bind --preset $argv \ch backward-delete-char
-    bind --preset $argv \cp up-or-search
-    bind --preset $argv \cn down-or-search
-    bind --preset $argv \cf forward-char
-    bind --preset $argv \cb backward-char
-    bind --preset $argv \ct transpose-chars
-    bind --preset $argv \c_ undo
-    bind --preset $argv \cz undo
-    bind --preset $argv \e/ redo
-    bind --preset $argv \et transpose-words
-    bind --preset $argv \eu upcase-word
-
-    # This clashes with __fish_list_current_token
-    # bind --preset $argv \el downcase-word
-    bind --preset $argv \ec capitalize-word
-    # One of these is alt+backspace.
-    bind --preset $argv \e\x7f backward-kill-word
-    bind --preset $argv \e\b backward-kill-word
-    if not test "$TERM_PROGRAM" = Apple_Terminal
-        bind --preset $argv \eb backward-word
-        bind --preset $argv \ef forward-word
-    else
-        # Terminal.app sends \eb for alt+left, \ef for alt+right.
-        # Yeah.
-        bind --preset $argv \eb prevd-or-backward-word
-        bind --preset $argv \ef nextd-or-forward-word
-    end
-
-    bind --preset $argv \e\< beginning-of-buffer
-    bind --preset $argv \e\> end-of-buffer
-
-    bind --preset $argv \ed kill-word
-
-    # Let ctrl+r search history if there is something in the commandline.
-    bind --preset $argv \cr 'commandline | string length -q; and commandline -f history-search-backward'
-
-    # term-specific special bindings
+    # TODO(term-workaround)
     switch "$TERM"
-        case 'rxvt*'
-            bind --preset $argv \e\[8~ end-of-line
-            bind --preset $argv \eOc forward-word
-            bind --preset $argv \eOd backward-word
         case xterm-256color
             # Microsoft's conemu uses xterm-256color plus
             # the following to tell a console to paste:

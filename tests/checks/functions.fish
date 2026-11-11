@@ -6,10 +6,12 @@ end
 
 # ==========
 # Verify that `functions --details` works as expected when given too many args.
-set x (functions --details f1 f2 2>&1)
-if test "$x" != "functions --details: Expected 1 args, got 2"
-    echo "Unexpected output for 'functions --details f1 f2': $x" >&2
-end
+functions --details f1 f2
+#CHECKERR: functions: --details: expected 1 arguments; got 2
+
+# Verify that it still mentions "--details" even if it isn't the last option.
+functions --details --verbose f1 f2
+#CHECKERR: functions: --details: expected 1 arguments; got 2
 
 # ==========
 # Verify that `functions --details` works as expected when given the name of a
@@ -20,31 +22,29 @@ functions --details f1
 # ==========
 # Verify that `functions --details` works as expected when given the name of an
 # unknown function.
-set x (functions -D f2)
-if test "$x" != n/a
-    echo "Unexpected output for 'functions --details f2': $x" >&2
-end
+functions -D f2
+#CHECK: n/a
 
 # ==========
 # Verify that `functions --details` works as expected when given the name of a
 # function that could be autoloaded but isn't currently loaded.
-set x (functions -D abbr)
+set x (functions -D vared)
 if test (count $x) -ne 1
-    or not string match -q '*/share/functions/abbr.fish' "$x"
-    echo "Unexpected output for 'functions -D abbr': $x" >&2
+    or not string match -rq '.*functions/vared\.fish' "$x"
+    echo "Unexpected output for 'functions -D vared': $x" >&2
 end
 
 # ==========
 # Verify that `functions --verbose --details` works as expected when given the name of a
 # function that was autoloaded.
-set x (functions -v -D abbr)
+set x (functions -v -D vared)
 if test (count $x) -ne 5
-    or not string match -q '*/share/functions/abbr.fish' $x[1]
-    or test $x[2] != autoloaded
-    or test $x[3] != 1
+    or not string match -rq '.*functions/vared\.fish' $x[1]
+    or test $x[2] != n/a
+    or test $x[3] != 7
     or test $x[4] != scope-shadowing
-    or test $x[5] != 'Manage abbreviations'
-    echo "Unexpected output for 'functions -v -D abbr': $x" >&2
+    or test $x[5] != 'Edit variable value'
+    echo "Unexpected output for 'functions -v -D vared': $x" >&2
 end
 
 # ==========
@@ -57,6 +57,28 @@ set x (functions -v -D multiline_descr)
 if test $x[5] != 'line 1\\\\n\\nline 2 & more; way more'
     echo "Unexpected output for 'functions -v -D multiline_descr': $x" >&2
 end
+
+# ==========
+# Verify that `functions --details` works as expected when given the name of a
+# function that is copied. (Prints the filename where it was copied.)
+functions -c f1 f1a
+functions -D f1a
+#CHECK: {{.*}}checks/functions.fish
+functions -Dv f1a
+#CHECK: {{.*}}checks/functions.fish
+#CHECK: n/a
+#CHECK: {{\d+}}
+#CHECK: scope-shadowing
+#CHECK:
+echo "functions -c f1 f1b" | source
+functions -D f1b
+#CHECK: -
+functions -Dv f1b
+#CHECK: -
+#CHECK: n/a
+#CHECK: {{\d+}}
+#CHECK: scope-shadowing
+#CHECK:
 
 # ==========
 # Verify function description setting
@@ -93,10 +115,37 @@ type -t ls
 #CHECK: file
 
 # ==========
-# Verify that `functions --query` does not return 0 if there are 256 missing functions
+# Verify that `functions --query` returns 0 if any named function exists,
+# matching type/command/builtin. Missing extra names no longer increment status.
+functions --query f1
+echo $status
+#CHECK: 0
+
+functions --query doesnotexist-pleasedonotexist
+echo $status
+#CHECK: 1
+
+functions --query doesnotexist-pleasedonotexist f1
+echo $status
+#CHECK: 0
+
+functions --query f1 doesnotexist-pleasedonotexist
+echo $status
+#CHECK: 0
+
+functions --query doesnotexist-a doesnotexist-b doesnotexist-c
+echo $status
+#CHECK: 1
+
+# Many missing names used to overflow/wrap the missing-count status.
+# With the any-exists semantics this is simply 1.
 functions --query a(seq 1 256)
 echo $status
-#CHECK: 255
+#CHECK: 1
+
+functions --query
+echo $status
+#CHECK: 1
 
 echo "function t; echo tttt; end" | source
 functions t
@@ -110,10 +159,199 @@ functions --no-details t
 # CHECK: echo tttt;
 # CHECK: end
 
-functions --no-details --details t
-# CHECKERR: functions: Invalid combination of options
-# CHECKERR:
-# CHECKERR: checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions --no-details --details t
-# CHECKERR: ^
+functions -c t t2
+functions t2
+# CHECK: # Defined in {{.*}}checks/functions.fish @ line {{\d+}}
+# CHECK: function t2
+# CHECK: echo tttt;
+# CHECK: end
+functions -D t2
+#CHECK: {{.*}}checks/functions.fish
+functions -Dv t2
+#CHECK: {{.*}}checks/functions.fish
+#CHECK: n/a
+#CHECK: {{\d+}}
+#CHECK: scope-shadowing
+#CHECK:
+
+functions -c first
+# CHECKERR: functions: Expected exactly two names (current function name, and new function name)
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions -c first
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
+
+functions -c first second third
+# CHECKERR: functions: Expected exactly two names (current function name, and new function name)
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions -c first second third
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+functions -c unknown_function copy
+# CHECKERR: functions: Function 'unknown_function' does not exist
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions -c unknown_function copy
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+function to_copy
+end
+functions -c -- to_copy -invalid_name
+# CHECKERR: functions: Illegal function name '-invalid_name'
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions -c -- to_copy -invalid_name
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+functions -c -- to_copy function
+# CHECKERR: functions: Illegal function name 'function'
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions -c -- to_copy function
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+functions -c -- to_copy to_copy
+# CHECKERR: functions: Function 'to_copy' already exists. Cannot create copy of 'to_copy'
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions -c -- to_copy to_copy
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+echo "functions -c t t3" | source
+functions t3
+# CHECK: # Defined via `source`
+# CHECK: function t3
+# CHECK: echo tttt;
+# CHECK: end
+functions -D t3
+#CHECK: -
+functions -Dv t3
+#CHECK: -
+#CHECK: n/a
+#CHECK: {{\d+}}
+#CHECK: scope-shadowing
+#CHECK:
+
+functions --no-details t2
+# CHECK: function t2
+# CHECK: echo tttt;
+# CHECK: end
+
+functions --no-details --details t
+# CHECKERR: functions: invalid option combination
+# CHECKERR:
+# CHECKERR: {{.*}}checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions --no-details --details t
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+# XXX FIXME ^ caret should point at --no-details --details
+
+function term1 --on-signal TERM
+end
+function term2 --on-signal TERM
+end
+function term3 --on-signal TERM
+end
+
+functions --handlers-type signal
+# CHECK: Event signal
+# CHECK: SIGTRAP fish_sigtrap_handler
+# CHECK: SIGTERM term1
+# CHECK: SIGTERM term2
+# CHECK: SIGTERM term3
+
+functions -t invalid_type
+# CHECKERR: functions: Expected generic | variable | signal | exit | job-id for --handlers-type
+
+# See how --names and --all work.
+# We don't want to list all of our functions here,
+# so we just match a few that we know are there.
+functions -n | string match cd
+# CHECK: cd
+
+functions --names | string match __fish_config_interactive
+echo $status
+# CHECK: 1
+
+functions --names -a | string match __fish_config_interactive
+# CHECK: __fish_config_interactive
+
+functions --description ""
+# CHECKERR: functions: Expected exactly one function name
+# CHECKERR: {{.*}}checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions --description ""
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+function foo --on-variable foo
+end
+# This should print *everything*
+functions --handlers-type "" | string match 'Event *'
+# CHECK: Event signal
+# CHECK: Event variable
+# CHECK: Event generic
+functions -e foo
+
+functions --details --verbose thisfunctiondoesnotexist
+# CHECK: n/a
+# CHECK: n/a
+# CHECK: 0
+# CHECK: n/a
+# CHECK: n/a
+
+functions --banana
+# CHECKERR: functions: --banana: unknown option
+echo $status
+# CHECK: 2
+
+functions --all=arg
+# CHECKERR: functions: --all=arg: option does not take an argument
+echo $status
+# CHECK: 2
+
+# Test --color option
+function test_color_option
+    echo hello
+end
+
+functions --color=invalid
+# CHECKERR: functions: Invalid value for '--color' option: 'invalid'. Expected 'always', 'never', or 'auto'
+
+functions --color
+# CHECKERR: functions: --color: option requires an argument
+
+functions --no-details --color=never test_color_option
+# CHECK: function test_color_option
+# CHECK:     echo hello
+# CHECK: end
+
+fish_config theme choose default
+string escape (functions --no-details --color=always test_color_option)
+# CHECK: function\ \e\[36mtest_color_option\e\[32m
+# CHECK: \e\[39m\ \ \ \ echo\ \e\[36mhello\e\[32m
+# CHECK: \e\[39mend\e\[32m\e\[39m
+
+functions --names --query
+# CHECKERR: functions: invalid option combination
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions --names --query
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+functions -d desc unknown_function
+# CHECKERR: functions: Function 'unknown_function' does not exist
+# CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
+# CHECKERR: {{^}}functions -d desc unknown_function
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help functions' for related documentation)
+
+functions --details fish_config
+# CHECK: embedded:functions/fish_config.fish
+
+echo >defun.fish 'function defun; function foo; end; end'
+source defun.fish
+echo >use-defun.fish 'defun'
+source use-defun.fish
+functions --details foo
+# CHECK: defun.fish

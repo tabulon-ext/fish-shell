@@ -1,16 +1,16 @@
-# RUN: %fish -C 'set -g fish %fish' %s
+# RUN: fish=%fish %fish %s
 
 # caret position (#5812)
-printf '<%s>\n' ($fish -c ' $f[a]' 2>&1)
+$fish -c ' $f[a]'
 
-# CHECK: <fish: Invalid index value>
-# CHECK: < $f[a]>
-# CHECK: <    ^>
+# CHECKERR: fish: Invalid index value
+# CHECKERR: {{^}} $f[a]
+# CHECKERR: {{^}}    ^
 
-printf '<%s>\n' ($fish -c 'if $f[a]; end' 2>&1)
-# CHECK: <fish: Invalid index value>
-# CHECK: <if $f[a]; end>
-# CHECK: <      ^>
+$fish -c 'if $f[a]; end'
+# CHECKERR: fish: Invalid index value
+# CHECKERR: {{^}}if $f[a]; end
+# CHECKERR: {{^}}      ^
 
 set a A
 set aa AA
@@ -40,6 +40,7 @@ echo \'{ hello , world }\'
 for phrase in {good\,,   beautiful ,morning}
     echo -n "$phrase "
 end | string trim
+echo
 for phrase in {goodbye\,,\ cruel\ ,world\n}
     echo -n $phrase
 end
@@ -81,7 +82,7 @@ expansion "$foo"
 expansion $foo
 expansion "prefix$foo"
 expansion prefix$foo
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
 #CHECK: 1 prefix
 #CHECK: 0
@@ -90,7 +91,7 @@ expansion "$$foo"
 expansion $$foo
 expansion "prefix$$foo"
 expansion prefix$$foo
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
 #CHECK: 1 prefix
 #CHECK: 0
@@ -100,8 +101,8 @@ expansion "$foo"
 expansion $foo
 expansion "prefix$foo"
 expansion prefix$foo
-#CHECK: 1 
-#CHECK: 1 
+#CHECK: 1
+#CHECK: 1
 #CHECK: 1 prefix
 #CHECK: 1 prefix
 
@@ -109,7 +110,7 @@ expansion "$$foo"
 expansion $$foo
 expansion "prefix$$foo"
 expansion prefix$$foo
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
 #CHECK: 1 prefix
 #CHECK: 0
@@ -120,7 +121,7 @@ expansion "$$foo"
 expansion $$foo
 expansion "prefix$$foo"
 expansion prefix$$foo
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
 #CHECK: 1 prefix
 #CHECK: 0
@@ -160,7 +161,7 @@ expansion prefix$$foo
 set -l fooer ''
 expansion $$foo
 expansion prefix$$foo
-#CHECK: 3 baz quux 
+#CHECK: 3 baz quux
 #CHECK: 3 prefixbaz prefixquux prefix
 
 # Slices
@@ -200,15 +201,15 @@ expansion "$foo[1 2]"
 expansion $foo[1 2]
 expansion "$foo[2 1]"
 expansion $foo[2 1]
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
-#CHECK: 1 
+#CHECK: 1
 #CHECK: 0
 set -l foo a b c
 expansion $foo[17]
@@ -224,33 +225,33 @@ expansion $foo[2..-1]
 #CHECK: 0
 expansion $foo[0]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
-#CHECKERR: expansion $foo[0]
-#CHECKERR: ^
+#CHECKERR: {{^}}expansion $foo[0]
+#CHECKERR: {{^}}               ^
 # see https://github.com/fish-shell/fish-shell/issues/8213
 expansion $foo[1..0]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
-#CHECKERR: expansion $foo[1..0]
-#CHECKERR: ^
+#CHECKERR: {{^}}expansion $foo[1..0]
+#CHECKERR: {{^}}                  ^
 expansion $foo[-0]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
-#CHECKERR: expansion $foo[-0]
-#CHECKERR: ^
+#CHECKERR: {{^}}expansion $foo[-0]
+#CHECKERR: {{^}}               ^
 
 echo "$foo[d]"
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): Invalid index value
-#CHECKERR: echo "$foo[d]"
-#CHECKERR: ^
+#CHECKERR: {{^}}echo "$foo[d]"
+#CHECKERR: {{^}}           ^
 echo $foo[d]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): Invalid index value
-#CHECKERR: echo $foo[d]
-#CHECKERR: ^
+#CHECKERR: {{^}}echo $foo[d]
+#CHECKERR: {{^}}          ^
 
 echo ()[1]
 # No output
 echo ()[d]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): Invalid index value
-#CHECKERR: echo ()[d]
-#CHECKERR: ^
+#CHECKERR: {{^}}echo ()[d]
+#CHECKERR: {{^}}        ^
 
 set -l outer out1 out2
 set -l inner 1 2
@@ -269,8 +270,8 @@ echo "All digits: $status"
 set paren ')'
 echo $$paren
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): $) is not a valid variable in fish.
-#CHECKERR: echo $$paren
-#CHECKERR: ^
+#CHECKERR: {{^}}echo $$paren
+#CHECKERR: {{^}}      ^
 
 # Test tilde expansion
 # On OS X, /tmp is symlinked to /private/tmp
@@ -283,9 +284,13 @@ mkdir $tmpdir/realhome
 ln -s $tmpdir/realhome $tmpdir/linkhome
 set expandedtilde (env HOME=$tmpdir/linkhome $fish -c 'echo ~')
 if test $expandedtilde != $tmpdir/linkhome
-	echo '~ expands to' $expandedtilde ' - expected ' $tmpdir/linkhome
+    echo '~ expands to' $expandedtilde ' - expected ' $tmpdir/linkhome
 end
-rm $tmpdir/linkhome
+if cygwin_nosymlinks
+    rmdir $tmpdir/linkhome
+else
+    rm $tmpdir/linkhome
+end
 rmdir $tmpdir/realhome
 rmdir $tmpdir
 
@@ -312,19 +317,54 @@ echo "Back to normal variable: $testvar" (count $testvar)
 
 # Test fatal syntax errors
 $fish -c 'echo $,foo'
-#CHECKERR: fish: $, is not a valid variable in fish.
-#CHECKERR: echo $,foo
-#CHECKERR: ^
+#CHECKERR: fish: Expected a variable name after this $.
+#CHECKERR: {{^}}echo $,foo
+#CHECKERR: {{^}}      ^
 $fish -c 'echo {'
 #CHECKERR: fish: Unexpected end of string, incomplete parameter expansion
-#CHECKERR: echo {
-#CHECKERR: ^
+#CHECKERR: {{^}}echo {
+#CHECKERR: {{^}}     ^
 $fish -c 'echo {}}'
-#CHECKERR: fish: Unexpected '}' for unopened brace expansion
-#CHECKERR: echo {}}
-#CHECKERR: ^
+#CHECKERR: fish: Unexpected '}' for unopened brace
+#CHECKERR: {{^}}echo {}}
+#CHECKERR: {{^}}       ^
 $fish -c 'command (asd)'
-#CHECKERR: fish: Command substitutions not allowed
-#CHECKERR: command (asd)
-#CHECKERR: ^
+#CHECKERR: fish: Only `$()` command substitutions are allowed in command position. Try `$(your-cmd) ...`
+#CHECKERR: {{^}}command (asd)
+#CHECKERR: {{^}}        ^~~~^
 true
+
+$fish -c 'echo "$abc["'
+#CHECKERR: fish: Invalid index value
+#CHECKERR: {{^}}echo "$abc["
+#CHECKERR: {{^}}           ^
+
+set -l pager command less
+echo foo | $pager
+#CHECKERR: {{.*}}checks/expansion.fish (line {{\d+}}): The expanded command is a keyword.
+#CHECKERR: {{^}}echo foo | $pager
+#CHECKERR: {{^}}           ^~~~~^
+
+command -h
+#CHECKERR: Documentation for command
+
+echo {~,asdf}
+# CHECK: /{{.*}} asdf
+echo {asdf,~}
+# CHECK: asdf /{{.*}}
+echo {~}
+# CHECK: {~}
+
+function compare
+    test $argv[1] = $argv[2]
+    or begin
+        echo unexpected expansion result:
+        echo expected: $argv[1]
+        echo actual: $argv[2]
+    end
+end
+if string match -rq -- '^[\w.-]+$' $USER
+    set -l user_home "$(eval "echo ~$USER")"
+    compare $user_home "$(echo ~$USER)"
+    compare $user_home "$(echo ~(printf %s $USER))"
+end

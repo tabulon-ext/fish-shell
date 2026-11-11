@@ -1,10 +1,12 @@
-.. _cmd-fish_prompt:
-
 fish_prompt - define the appearance of the command line prompt
 ==============================================================
 
 Synopsis
 --------
+
+.. synopsis::
+
+    fish_prompt
 
 ::
 
@@ -19,6 +21,10 @@ Description
 The ``fish_prompt`` function is executed when the prompt is to be shown, and the output is used as a prompt.
 
 The exit status of commands within ``fish_prompt`` will not modify the value of :ref:`$status <variables-status>` outside of the ``fish_prompt`` function.
+
+If :envvar:`fish_transient_prompt` is set to 1, ``fish_prompt --final-rendering`` is run before executing the commandline.
+
+If :envvar:`SHELL_PROMPT_PREFIX` or :envvar:`SHELL_PROMPT_SUFFIX` are set, they are automatically prepended and appended to the left prompt. This applies to all prompts regardless of whether ``fish_prompt`` has been customized.
 
 ``fish`` ships with a number of example prompts that can be chosen with the ``fish_config`` command.
 
@@ -37,7 +43,7 @@ A simple prompt:
         # $USER and $hostname are set by fish, so you can just use them
         # instead of using `whoami` and `hostname`
         printf '%s@%s %s%s%s > ' $USER $hostname \
-            (set_color $fish_color_cwd) (prompt_pwd) (set_color normal)
+            (set_color $fish_color_cwd) (prompt_pwd) (set_color --reset)
     end
 
 

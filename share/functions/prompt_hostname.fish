@@ -1,4 +1,4 @@
-function prompt_hostname
-    # return the short hostname only by default (#4804)
-    string replace -r "\..*" "" $hostname
+# localization: tier1
+function prompt_hostname --description 'short hostname for the prompt'
+    string replace -r -- "\..*" "" $hostname
 end

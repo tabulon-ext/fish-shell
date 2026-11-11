@@ -1,5 +1,6 @@
+# localization: tier1
 function funcsave --description "Save the current definition of all specified functions to file"
-    set -l options h/help 'd/directory='
+    set -l options q/quiet h/help d/directory=
     argparse -n funcsave $options -- $argv
     or return
 
@@ -8,6 +9,7 @@ function funcsave --description "Save the current definition of all specified fu
         return 0
     end
 
+    set -l funcdir
     if set -q _flag_directory
         set funcdir $_flag_directory
     else
@@ -15,21 +17,26 @@ function funcsave --description "Save the current definition of all specified fu
     end
 
     if not set -q argv[1]
-        printf (_ "%ls: Expected at least %d args, got only %d\n") funcsave 1 0
+        printf (_ "%s: Expected at least %d args, got only %d\n") funcsave 1 0 >&2
         return 1
     end
 
     if not mkdir -p $funcdir
-        printf (_ "%s: Could not create configuration directory '%s'\n") funcsave $funcdir
+        printf (_ "%s: Could not create configuration directory '%s'\n") funcsave $funcdir >&2
         return 1
     end
 
     set -l retval 0
     for funcname in $argv
+        set -l funcpath "$funcdir/$funcname.fish"
         if functions -q -- $funcname
-            functions --no-details -- $funcname >$funcdir/$funcname.fish
+            functions --no-details -- $funcname >$funcpath
+            and set -q _flag_quiet || printf (_ "%s: wrote %s\n") funcsave $funcpath
+        else if test -w $funcpath
+            command rm $funcpath
+            and set -q _flag_quiet || printf (_ "%s: removed %s\n") funcsave $funcpath
         else
-            printf (_ "%s: Unknown function '%s'\n") funcsave $funcname
+            printf (_ "%s: Unknown function '%s'\n") funcsave $funcname >&2
             set retval 1
         end
     end

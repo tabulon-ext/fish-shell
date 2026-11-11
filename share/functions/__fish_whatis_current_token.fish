@@ -1,3 +1,4 @@
+# localization: tier1
 # This function is typically bound to Alt-W, it is used to list man page entries
 # for the command under the cursor.
 function __fish_whatis_current_token -d "Show man page entries or function description related to the token under the cursor"
@@ -6,7 +7,6 @@ function __fish_whatis_current_token -d "Show man page entries or function descr
     test -n "$token"
     or return
 
-    printf "\n"
     set -l desc "$token: nothing appropriate."
 
     set -l tokentype (type --type $token 2>/dev/null)
@@ -19,24 +19,13 @@ function __fish_whatis_current_token -d "Show man page entries or function descr
             and set desc "$token - $funcinfo[5]"
 
         case builtin
-            set desc (__fish_print_help $token | awk "/./ {print; exit}")
+            # Since man pages can be localized, we can't look for "NAME".
+            set desc (__fish_print_help $token | sed -n 4p | string trim)
 
         case file
             set -l tmpdesc (whatis $token 2>/dev/null)
             and set desc $tmpdesc
     end
 
-    printf "%s\n" $desc
-
-    set -l line_count (count (fish_prompt))
-    # Ensure line_count is greater than one to accomodate different
-    # versions of the `seq` command, some of which print the sequence in
-    # reverse order when the second argument is smaller than the first
-    if test $line_count -gt 1
-        for x in (seq 2 $line_count)
-            printf "\n"
-        end
-    end
-
-    commandline -f repaint
+    __fish_echo string join \n -- $desc
 end

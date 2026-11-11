@@ -71,9 +71,12 @@ complete -c nmap -l max-os-tries -d 'Set the maximum number of OS detection trie
 # NMAP SCRIPTING ENGINE (NSE)
 complete -c nmap -o sC -d 'Scan: Scripts (default)'
 function __fish_complete_nmap_script
+    set -l now (date "+%s")
+
     # cache completion for 5 minutes (`nmap --script-help all` is slow)
-    if test -z "$__fish_nmap_script_completion_cache" -o (date -d "now - 5min" +"%s") -gt "$__fish_nmap_script_completion_cache_time"
-        set -g __fish_nmap_script_completion_cache_time (date +"%s")
+    # must use `math` because of differences between BSD and GNU `date`
+    if test -z "$__fish_nmap_script_completion_cache" -o (math $now - 5 "*" 60) -gt "$__fish_nmap_script_completion_cache_time"
+        set -g __fish_nmap_script_completion_cache_time $now
         set -g __fish_nmap_script_completion_cache ""
         set -l cmd
         for l in (nmap --script-help all 2> /dev/null | grep -A2 -B1 Categories: | grep -v '^\\(--\\|Categories:\\|https:\\)')
@@ -89,17 +92,17 @@ function __fish_complete_nmap_script
     end
     echo -e $__fish_nmap_script_completion_cache
 end
-complete -c nmap -l script -r -a "(__fish_complete_list , __fish_complete_nmap_script)"
+complete -c nmap -l script -r -a "(__fish_stripprefix='^--script=' __fish_complete_list , __fish_complete_nmap_script)"
 complete -c nmap -l script -r -d 'Runs a script scan'
 complete -c nmap -l script-args -d 'provide arguments to NSE scripts'
 complete -c nmap -l script-args-file -r -d 'load arguments to NSE scripts from a file'
-complete -c nmap -l script-help -r -a "(__fish_complete_list , __fish_complete_nmap_script)"
+complete -c nmap -l script-help -r -a "(__fish_stripprefix='^--script-help=' __fish_complete_list , __fish_complete_nmap_script)"
 complete -c nmap -l script-help -r -d "Shows help about scripts"
 complete -c nmap -l script-trace
 complete -c nmap -l script-updatedb
 
 # TIMING AND PERFORMANCE
-complete -c nmap -l min-hostgroup -l max-hostgroup -x -d 'Adjust paralel scan group size'
+complete -c nmap -l min-hostgroup -l max-hostgroup -x -d 'Adjust parallel scan group size'
 complete -c nmap -l min-parallelism -l max-parallelism -x -d 'Adjust probe parallelization'
 complete -c nmap -l min-rtt-timeout -l max-rtt-timeout -l initial-rtt-timeout -x -d 'Adjust probe timeouts'
 complete -c nmap -l max-retries -x -d 'Specify the maximum number of port scan probe retransmissions'

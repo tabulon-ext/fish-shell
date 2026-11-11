@@ -7,7 +7,7 @@
 #
 
 set -l is_gnu
-df --version >/dev/null 2>/dev/null; and set is_gnu --is-gnu
+__fish_supports_version df; and set is_gnu --is-gnu
 
 __fish_gnu_complete -c df -s h -l human-readable -d "Human readable sizes" $is_gnu
 __fish_gnu_complete -c df -s i -l inodes -d "List inode information" $is_gnu
@@ -33,6 +33,6 @@ else
     complete -c df -s a -d "Show all file systems"
     complete -c df -s g -d "Show sizes in gigabytes"
     complete -c df -s m -d "Show sizes in megabytes"
-    complete -c df -s n -d "Print out the previously obtained statistics from the file systems"
+    complete -c df -s n -d "Use cached statistics"
 
 end

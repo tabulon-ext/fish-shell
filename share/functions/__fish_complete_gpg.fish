@@ -1,3 +1,4 @@
+# localization: tier3
 #
 # Completions for the gpg program.
 #
@@ -15,8 +16,8 @@
 # removed. The remaining list of completions is still quite
 # impressive.
 
-function __fish_complete_gpg -d "Internal function for gpg completion code deduplication" -a __fish_complete_gpg_command
-    if string match -q 'gpg (GnuPG) 1.*' ($__fish_complete_gpg_command --version)
+function __fish_complete_gpg -a __fish_complete_gpg_command
+    if string match -q 'gpg (GnuPG) 1.*' ($__fish_complete_gpg_command --version 2>/dev/null)
         complete -c $__fish_complete_gpg_command -l simple-sk-checksum -d 'Integrity protect secret keys by using a SHA-1 checksum'
         complete -c $__fish_complete_gpg_command -l no-sig-create-check -d "Do not verify each signature right after creation"
         complete -c $__fish_complete_gpg_command -l pgp2 -d "Set up all options to be as PGP 2.x compliant as possible"
@@ -47,7 +48,7 @@ function __fish_complete_gpg -d "Internal function for gpg completion code dedup
         complete -c $__fish_complete_gpg_command -l skip-hidden-recipients -d "During decryption, skip all anonymous recipients"
         complete -c $__fish_complete_gpg_command -l tofu-default-policy -xa "auto good unknown bad ask" -d "Set the default TOFU policy"
         complete -c $__fish_complete_gpg_command -l tofu-policy -xa "auto good unknown bad ask" -d "Set the default TOFU policy for the specified keys"
-        complete -c $__fish_complete_gpg_command -l try-secret-key -xa "(__fish_complete_gpg_key_id $__fish_complete_gpg_command)" -d "Specify keys to be used for trial decryption"
+        complete -c $__fish_complete_gpg_command -l try-secret-key -xa "(__fish_complete_gpg_key_id $__fish_complete_gpg_command --list-secret-keys)" -d "Specify keys to be used for trial decryption"
 
         complete -c $__fish_complete_gpg_command -l with-icao-spelling -d "Print the ICAO spelling of the fingerprint in addition to the hex digits"
         complete -c $__fish_complete_gpg_command -l with-key-origin -d "Include the locally held information on the origin and last update of a key in a key listing"
@@ -101,7 +102,7 @@ function __fish_complete_gpg -d "Internal function for gpg completion code dedup
 
     complete -c $__fish_complete_gpg_command -s k -l list-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "List all keys from the public keyrings, or just the ones given on the command line"
     complete -c $__fish_complete_gpg_command -l list-public-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "List all keys from the public keyrings, or just the ones given on the command line"
-    complete -c $__fish_complete_gpg_command -s K -l list-secret-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "List all keys from the secret keyrings, or just the ones given on the command line"
+    complete -c $__fish_complete_gpg_command -s K -l list-secret-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command --list-secret-keys)" -d "List all keys from the secret keyrings, or just the ones given on the command line"
     complete -c $__fish_complete_gpg_command -l list-sigs -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Same as --list-keys, but the signatures are listed too"
 
     complete -c $__fish_complete_gpg_command -l check-sigs -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Same as --list-keys, but the signatures are listed and verified"
@@ -116,9 +117,9 @@ function __fish_complete_gpg -d "Internal function for gpg completion code dedup
     complete -c $__fish_complete_gpg_command -l lsign-key -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Sign a public key with your secret key but mark it as non exportable"
 
     complete -c $__fish_complete_gpg_command -l delete-key -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Remove key from the public keyring"
-    complete -c $__fish_complete_gpg_command -l delete-secret-key -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Remove key from the secret and public keyring"
+    complete -c $__fish_complete_gpg_command -l delete-secret-key -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command --list-secret-keys)" -d "Remove key from the secret and public keyring"
     complete -c $__fish_complete_gpg_command -l delete-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Remove key from the public keyring"
-    complete -c $__fish_complete_gpg_command -l delete-secret-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Remove key from the secret and public keyring"
+    complete -c $__fish_complete_gpg_command -l delete-secret-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command --list-secret-keys)" -d "Remove key from the secret and public keyring"
     complete -c $__fish_complete_gpg_command -l delete-secret-and-public-key -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Same as --delete-key, but if a secret key exists, it will be removed first"
 
     complete -c $__fish_complete_gpg_command -l gen-revoke -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Generate a revocation certificate for the complete key"
@@ -127,7 +128,7 @@ function __fish_complete_gpg -d "Internal function for gpg completion code dedup
     complete -c $__fish_complete_gpg_command -l export -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d 'Export all or the given keys from all keyrings'
     complete -c $__fish_complete_gpg_command -l export-ssh-key -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d 'Export all or the given keys in OpenSSH format'
     complete -c $__fish_complete_gpg_command -l send-keys -xa "(__fish_complete_gpg_key_id $__fish_complete_gpg_command)" -d "Same as --export but sends the keys to a keyserver"
-    complete -c $__fish_complete_gpg_command -l export-secret-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Same as --export, but exports the secret keys instead"
+    complete -c $__fish_complete_gpg_command -l export-secret-keys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command --list-secret-keys)" -d "Same as --export, but exports the secret keys instead"
     complete -c $__fish_complete_gpg_command -l export-secret-subkeys -xa "(__fish_complete_gpg_user_id $__fish_complete_gpg_command)" -d "Same as --export, but exports the secret keys instead"
 
     complete -c $__fish_complete_gpg_command -l import -d 'Import/merge keys'
@@ -157,7 +158,6 @@ function __fish_complete_gpg -d "Internal function for gpg completion code dedup
     complete -c $__fish_complete_gpg_command -l version -d "Display version and supported algorithms, and exit"
     complete -c $__fish_complete_gpg_command -l warranty -d "Display warranty and exit"
     complete -c $__fish_complete_gpg_command -s h -l help -d "Display help and exit"
-
 
     #
     # gpg options
@@ -263,9 +263,6 @@ function __fish_complete_gpg -d "Internal function for gpg completion code dedup
 
     complete -c $__fish_complete_gpg_command -l for-your-eyes-only -d "Set the 'for your eyes only' flag in the message"
     complete -c $__fish_complete_gpg_command -l no-for-your-eyes-only -d "Clear the 'for your eyes only' flag in the message"
-
-    complete -c $__fish_complete_gpg_command -l use-embedded-filename -d "Create file with name as given in data"
-    complete -c $__fish_complete_gpg_command -l no-use-embedded-filename -d "Don't create file with name as given in data"
 
     complete -c $__fish_complete_gpg_command -l completes-needed -x -d "Number of completely trusted users to introduce a new key signer (defaults to 1)"
     complete -c $__fish_complete_gpg_command -l marginals-needed -x -d "Number of marginally trusted users to introduce a new key signer (defaults to 3)"

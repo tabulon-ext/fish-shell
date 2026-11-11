@@ -1,26 +1,19 @@
+# localization: tier1
 # This function is typically bound to Alt-L, it is used to list the contents
 # of the directory under the cursor.
 
 function __fish_list_current_token -d "List contents of token under the cursor if it is a directory, otherwise list the contents of the current directory"
-    set -l val (commandline -t)
-    printf "\n"
+    set -l val "$(commandline -t | string replace -r '^~' "$HOME")"
+    set -l cmd
     if test -d $val
-        ls $val
+        set cmd ls $val
     else
         set -l dir (dirname -- $val)
         if test $dir != . -a -d $dir
-            ls $dir
+            set cmd ls $dir
         else
-            ls
+            set cmd ls
         end
     end
-
-    set -l line_count (count (fish_prompt))
-    if test $line_count -gt 1
-        for x in (seq 2 $line_count)
-            printf "\n"
-        end
-    end
-
-    commandline -f repaint
+    __fish_echo $cmd
 end

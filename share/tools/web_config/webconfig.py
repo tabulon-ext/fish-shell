@@ -1,12 +1,9 @@
-from __future__ import unicode_literals
-from __future__ import print_function
 import binascii
-
-try:
-    from html import escape as escape_html
-except ImportError:
-    from cgi import escape as escape_html
+import errno
+import shlex
 import glob
+import http.server as SimpleHTTPServer
+import json
 import multiprocessing.pool
 import operator
 import os
@@ -14,11 +11,15 @@ import platform
 import re
 import select
 import socket
+import socketserver as SocketServer
 import subprocess
 import sys
 import tempfile
 import threading
+from html import escape as escape_html
 from itertools import chain
+from typing import Optional
+from urllib.parse import parse_qs
 
 COMMON_WSL_CMD_PATHS = (
     "/mnt/c/Windows/System32",
@@ -26,22 +27,11 @@ COMMON_WSL_CMD_PATHS = (
     "/c/Windows/System32",
 )
 FISH_BIN_PATH = False  # will be set later
-IS_PY2 = sys.version_info[0] == 2
 
-if IS_PY2:
-    import SimpleHTTPServer
-    import SocketServer
-    from urlparse import parse_qs
-else:
-    import http.server as SimpleHTTPServer
-    import socketserver as SocketServer
-    from urllib.parse import parse_qs
 
-try:
-    import json
-except ImportError:
-    import simplejson as json
-
+ENTER_BOLD_MODE = "\x1b[1m"
+EXIT_ATTRIBUTE_MODE = "\x1b[m"
+ENTER_UNDERLINE_MODE = "\x1b[4m"
 
 # Disable CLI web browsers
 term = os.environ.pop("TERM", None)
@@ -49,8 +39,10 @@ term = os.environ.pop("TERM", None)
 # which will block the whole process - see https://docs.python.org/3/library/webbrowser.html
 import webbrowser
 
-if term:
+if term is not None:
     os.environ["TERM"] = term
+
+TERMINAL_COLOR_THEME = os.environ["__fish_terminal_color_theme"]
 
 
 def find_executable(exe, paths=()):
@@ -63,16 +55,8 @@ def find_executable(exe, paths=()):
             return proposed_path
 
 
-def isMacOS10_12_5_OrLater():
-    """ Return whether this system is macOS 10.12.5 or a later version. """
-    try:
-        return [int(x) for x in platform.mac_ver()[0].split(".")] >= [10, 12, 5]
-    except:
-        return False
-
-
 def is_wsl():
-    """ Return whether we are running under the Windows Subsystem for Linux """
+    """Return whether we are running under the Windows Subsystem for Linux"""
     if "linux" in platform.system().lower() and os.access("/proc/version", os.R_OK):
         with open("/proc/version", "r") as f:
             # Find 'Microsoft' for wsl1 and 'microsoft' for wsl2
@@ -81,32 +65,42 @@ def is_wsl():
     return False
 
 
+def is_windows():
+    """Return whether we are running under the Windows"""
+    return sys.platform.startswith("win")
+
+
+def is_sailfish_os():
+    """Return whether we are running on Sailfish OS"""
+    if "linux" in platform.system().lower() and os.access(
+        "/etc/sailfish-release", os.R_OK
+    ):
+        with open("/etc/sailfish-release", "r") as f:
+            # Find 'ID=sailfishos'
+            if "sailfishos" in f.read():
+                return True
+    return False
+
+
 def is_termux():
-    """ Return whether we are running under the Termux application for Android"""
+    """Return whether we are running under the Termux application for Android"""
     return "com.termux" in os.environ["PATH"] and find_executable("termux-open-url")
 
 
 def is_chromeos_garcon():
-    """ Return whether we are running in Chrome OS and the browser can't see local files """
+    """Return whether we are running in Chrome OS and the browser can't see local files"""
     # In Crostini Chrome OS Linux, the default browser opens URLs in Chrome
     # running outside the linux VM. This browser does not have access to the
     # Linux filesystem. This uses Garcon, see for example
     # https://chromium.googlesource.com/chromiumos/platform2/+/master/vm_tools/garcon/#opening-urls
     # https://source.chromium.org/search?q=garcon-url-handler
-    return "garcon-url-handler" in webbrowser.get().name
+    try:
+        return "garcon-url-handler" in webbrowser.get().name
+    except:
+        return False
 
 
-def run_fish_cmd(text):
-    # Ensure that fish is using UTF-8.
-    ctype = os.environ.get("LC_ALL", os.environ.get("LC_CTYPE", os.environ.get("LANG")))
-    env = None
-    if ctype is None or re.search(r"\.utf-?8$", ctype, flags=re.I) is None:
-        # override LC_CTYPE with en_US.UTF-8
-        # We're assuming this locale exists.
-        # Fish makes the same assumption in config.fish
-        env = os.environ.copy()
-        env.update(LC_CTYPE="en_US.UTF-8", LANG="en_US.UTF-8")
-
+def run_fish_cmd(text, strict=False, env=None):
     print("$ " + text)
     p = subprocess.Popen(
         [FISH_BIN_PATH],
@@ -118,13 +112,40 @@ def run_fish_cmd(text):
     out, err = p.communicate(text.encode("utf-8"))
     out = out.decode("utf-8", "replace")
     err = err.decode("utf-8", "replace")
+    if strict:
+        assert err == "", err
+        # TODO use check_output()
+        return out
     return out, err
+
+
+def list_embedded_files(path, suffix):
+    return [
+        path
+        for path in run_fish_cmd(
+            "status list-files " + escape_fish_cmd(path), strict=True
+        ).splitlines()
+        if path.endswith(suffix)
+    ]
+
+
+def get_embedded_file(path):
+    return run_fish_cmd("status get-file " + escape_fish_cmd(path), strict=True)
 
 
 def escape_fish_cmd(text):
     # Replace one backslash with two, and single quotes with backslash-quote
     escaped = text.replace("\\", "\\\\").replace("'", "\\'")
     return "'" + escaped + "'"
+
+
+def strip_one_layer(text, char):
+    # Strip the text from one layer of a given character
+    if text[-1] == char:
+        text = text[:-1]
+    if text[0] == char:
+        text = text[1:]
+    return text
 
 
 named_colors = {
@@ -156,7 +177,7 @@ bindings_blacklist = set(["self-insert", "'begin;end'"])
 
 
 def parse_one_color(comp):
-    """ A basic function to parse a single color value like 'FFA000' """
+    """A basic function to parse a single color value like 'FFA000'"""
     if comp in named_colors:
         # Named color
         return named_colors[comp]
@@ -172,7 +193,7 @@ def parse_one_color(comp):
 
 
 def better_color(c1, c2):
-    """ Indicate which color is "better", i.e. prefer term256 colors """
+    """Indicate which color is "better", i.e. prefer term256 colors"""
     if not c2:
         return c1
     if not c1:
@@ -188,43 +209,139 @@ def better_color(c1, c2):
     return c1
 
 
-def parse_color(color_str):
-    """A basic function to parse a color string, for example, 'red' '--bold'."""
-    comps = color_str.split(" ")
-    color = "normal"
+def parse_colors(colors_str):
+    for words in map(shlex.split, colors_str.splitlines()):
+        assert re.match(
+            r"^((?:fish_color_|fish_pager_color_)\w+)$",
+            words[0],
+        )
+    return {
+        "colors": sorted(
+            [
+                {"name": words[0]} | parse_color(words[1:])
+                for words in map(shlex.split, colors_str.splitlines())
+            ],
+            key=operator.itemgetter("name"),
+        ),
+    }
+
+
+def parse_color(comps):
+    """A basic function to parse a color string, for example, ['red', '--bold']."""
+    color = ""
     background_color = ""
-    bold, underline, italics, dim, reverse = False, False, False, False, False
-    for comp in comps:
-        # Remove quotes
-        comp = comp.strip("'\" ")
-        if comp == "--bold":
+    underline_color = ""
+    bold = False
+    underline = None
+    italics = False
+    strikethrough = False
+    dim = False
+    reverse = False
+    i = 0
+    while i < len(comps):
+        comp = comps[i]
+        if comp == "--bold" or comp == "-o":
             bold = True
-        elif comp == "--underline":
-            underline = True
-        elif comp == "--italics":
+        elif comp == "--underline" or comp == "-u":
+            underline = "single"
+        elif comp.startswith("--underline="):
+            # TODO(python>3.8): use removeprefix
+            underline = comp[len("--underline=") :]
+        elif comp.startswith(
+            "-u"
+        ):  # Multiple short options like "-rucurly" are not yet supported.
+            # TODO(python>3.8): use removeprefix
+            underline = comp[len("-u") :]
+        elif comp == "--italics" or comp == "-i":
             italics = True
-        elif comp == "--dim":
+        elif comp == "--dim" or comp == "-d":
             dim = True
-        elif comp == "--reverse":
+        elif comp == "--reverse" or comp == "-r":
             reverse = True
-        elif comp.startswith("--background="):
-            # Background color
-            background_color = better_color(
-                background_color, parse_one_color(comp[len("--background=") :])
-            )
+        elif comp == "--strikethrough" or comp == "-s":
+            strikethrough = True
+        elif comp.startswith("--theme="):
+            pass  # Not yet supported here.
         else:
-            # Regular color
-            color = better_color(color, parse_one_color(comp))
+
+            def parse_opt(
+                current_best: str, i: int, long_opt: str, short_opt: Optional[str]
+            ) -> str:
+                if comp.startswith(long_opt):
+                    c = comp[len(long_opt) :]
+                    if c[0] == "=":
+                        # There was a = between the long option and the value.
+                        # i.e. support also --background=red, not just --background red
+                        c = c[1:]
+                    parsed_c = parse_one_color(c)
+                    # We prefer the unparsed version - if it says "brgreen", we use brgreen,
+                    # instead of 00ff00
+                    if better_color(current_best, parsed_c) == parsed_c:
+                        return True, c, i
+                elif short_opt is not None and comp.startswith(short_opt):
+                    if comp == short_opt:
+                        if i + 1 == len(comps):
+                            c = ""
+                        else:
+                            c = comps[i + 1]
+                            i += 1
+                    else:
+                        c = comp[len(short_opt) :]
+                    parsed_c = parse_one_color(c)
+                    if better_color(current_best, parsed_c) == parsed_c:
+                        return True, c, i
+                return False, current_best, i
+
+            is_bg, background_color, i = parse_opt(
+                background_color, i, "--background", "-b"
+            )
+            is_ul, underline_color, i = parse_opt(
+                underline_color, i, "--underline-color", None
+            )
+            if not (is_bg or is_ul):
+                # Regular color
+                parsed_c = parse_one_color(comp)
+                if better_color(color, parsed_c) == parsed_c:
+                    color = comp
+        i += 1
 
     return {
         "color": color,
         "background": background_color,
+        "underline-color": underline_color,
         "bold": bold,
         "underline": underline,
         "italics": italics,
         "dim": dim,
         "reverse": reverse,
+        "strikethrough": strikethrough,
     }
+
+
+def unparse_color(col):
+    """A basic function to return the fish version of a color dict"""
+    if isinstance(col, str):
+        return col
+    ret = ""
+    if col["color"]:
+        ret += col["color"]
+    if col["bold"]:
+        ret += " --bold"
+    if col["underline"] is not None:
+        ret += " --underline=" + str(col["underline"])
+    if col["italics"]:
+        ret += " --italics"
+    if col["dim"]:
+        ret += " --dim"
+    if col["reverse"]:
+        ret += " --reverse"
+    if col["strikethrough"]:
+        ret += " --strikethrough"
+    if col["background"]:
+        ret += " --background=" + col["background"]
+    if col["underline-color"]:
+        ret += " --underline-color=" + col["underline-color"]
+    return ret
 
 
 def parse_bool(val):
@@ -501,36 +618,6 @@ def html_color_for_ansi_color_index(val):
         return arr[val]
 
 
-# Function to return special ANSI escapes like exit_attribute_mode
-g_special_escapes_dict = None
-
-
-def get_special_ansi_escapes():
-    global g_special_escapes_dict
-    if g_special_escapes_dict is None:
-        import curses
-
-        g_special_escapes_dict = {}
-        curses.setupterm()
-
-        # Helper function to get a value for a tparm
-        def get_tparm(key):
-            val = None
-            key = curses.tigetstr(key)
-            if key:
-                val = curses.tparm(key)
-            if val:
-                val = val.decode("utf-8")
-            return val
-
-        # Just a few for now
-        g_special_escapes_dict["exit_attribute_mode"] = get_tparm("sgr0")
-        g_special_escapes_dict["bold"] = get_tparm("bold")
-        g_special_escapes_dict["underline"] = get_tparm("smul")
-
-    return g_special_escapes_dict
-
-
 # Given a known ANSI escape sequence, convert it to HTML and append to the list
 # Returns whether we have an open <span>
 
@@ -575,12 +662,11 @@ def append_html_for_ansi_escape(full_val, result, span_open):
         return True  # span now open
 
     # Try special escapes
-    special_escapes = get_special_ansi_escapes()
-    if full_val == special_escapes["exit_attribute_mode"]:
+    if full_val == EXIT_ATTRIBUTE_MODE:
         close_span()
         return False
 
-    # TODO We don't handle bold, underline, italics, dim, or reverse yet
+    # TODO We don't handle bold, underline, italics, dim, strikethrough, or reverse yet
 
     # Do nothing on failure
     return span_open
@@ -657,7 +743,7 @@ def ansi_to_html(val):
 
 
 class FishVar:
-    """ A class that represents a variable """
+    """A class that represents a variable"""
 
     def __init__(self, name, value):
         self.name = name
@@ -676,12 +762,11 @@ class FishVar:
 
 
 class FishBinding:
-    """A class that represents keyboard binding """
+    """A class that represents keyboard binding"""
 
-    def __init__(self, command, raw_binding, readable_binding, description=None):
+    def __init__(self, command, raw_binding, readable_binding):
         self.command = command
         self.bindings = []
-        self.description = description
         self.add_binding(raw_binding, readable_binding)
 
     def add_binding(self, raw_binding, readable_binding):
@@ -698,171 +783,7 @@ class FishBinding:
         return {
             "command": self.command,
             "bindings": self.bindings,
-            "description": self.description,
         }
-
-
-class BindingParser:
-    """ Class to parse codes for bind command """
-
-    # TODO: What does snext and sprevious mean ?
-    readable_keys = {
-        "dc": "Delete",
-        "npage": "Page Up",
-        "ppage": "Page Down",
-        "sdc": "Shift Delete",
-        "shome": "Shift Home",
-        "left": "Left Arrow",
-        "right": "Right Arrow",
-        "up": "Up Arrow",
-        "down": "Down Arrow",
-        "sleft": "Shift Left",
-        "sright": "Shift Right",
-        "btab": "Shift Tab",
-    }
-
-    def set_buffer(self, buffer):
-        """ Sets code to parse """
-
-        self.buffer = buffer or b""
-        self.index = 0
-
-    def get_char(self):
-        """ Gets next character from buffer """
-        if self.index >= len(self.buffer):
-            return "\0"
-        c = self.buffer[self.index]
-        self.index += 1
-        return c
-
-    def unget_char(self):
-        """ Goes back by one character for parsing """
-
-        self.index -= 1
-
-    def end(self):
-        """ Returns true if reached end of buffer """
-
-        return self.index >= len(self.buffer)
-
-    def parse_control_sequence(self):
-        """ Parses terminal specifiec control sequences """
-
-        result = ""
-        c = self.get_char()
-
-        # \e0 is used to denote start of control sequence
-        if c == "O":
-            c = self.get_char()
-
-        # \[1\; is start of control sequence
-        if c == "1":
-            b = self.get_char()
-            c = self.get_char()
-            if b == "\\" and c == "~":
-                result += "Home"
-            elif c == ";":
-                c = self.get_char()
-
-        # 3 is Alt
-        if c == "3":
-            result += "ALT - "
-            c = self.get_char()
-
-        # \[4\~ is End
-        if c == "4":
-            b = self.get_char()
-            c = self.get_char()
-            if b == "\\" and c == "~":
-                result += "End"
-
-        # 5 is Ctrl
-        if c == "5":
-            result += "CTRL - "
-            c = self.get_char()
-
-        # 9 is Alt
-        if c == "9":
-            result += "ALT - "
-            c = self.get_char()
-
-        if c == "A":
-            result += "Up Arrow"
-        elif c == "B":
-            result += "Down Arrow"
-        elif c == "C":
-            result += "Right Arrow"
-        elif c == "D":
-            result += "Left Arrow"
-        elif c == "F":
-            result += "End"
-        elif c == "H":
-            result += "Home"
-
-        return result
-
-    def get_readable_binding(self):
-        """ Gets a readable representation of binding """
-
-        try:
-            result = BindingParser.readable_keys[self.buffer.lower()]
-        except KeyError:
-            result = self.parse_binding()
-
-        return result
-
-    def parse_binding(self):
-        readable_command = ""
-        result = ""
-        alt = ctrl = False
-
-        while not self.end():
-            c = self.get_char()
-
-            if c == "\\":
-                c = self.get_char()
-                if c == "e":
-                    d = self.get_char()
-                    if d == "O":
-                        self.unget_char()
-                        result += self.parse_control_sequence()
-                    elif d == "\\":
-                        if self.get_char() == "[":
-                            result += self.parse_control_sequence()
-                        else:
-                            self.unget_char()
-                            self.unget_char()
-                            alt = True
-                    elif d == "\0":
-                        result += "ESC"
-                    else:
-                        alt = True
-                        self.unget_char()
-                elif c == "c":
-                    ctrl = True
-                elif c == "n":
-                    result += "Enter"
-                elif c == "t":
-                    result += "Tab"
-                elif c == "b":
-                    result += "Backspace"
-                elif c.isalpha():
-                    result += "\\" + c
-                else:
-                    result += c
-            elif c == "\x7f":
-                result += "Backspace"
-            else:
-                result += c
-        if ctrl:
-            readable_command += "CTRL - "
-        if alt:
-            readable_command += "ALT - "
-
-        if result == "":
-            return "unknown-control-sequence"
-
-        return readable_command + result
 
 
 class FishConfigTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
@@ -880,116 +801,72 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def write_to_wfile(self, txt):
         self.wfile.write(txt.encode("utf-8"))
 
-    def do_get_colors(self, path=None):
-        """ Read the colors from a .theme file in path, or the current shell if no path has been given """
-        # Looks for fish_color_*.
-        # Returns an array of lists [color_name, color_description, color_value]
-        result = []
-
-        # Make sure we return at least these
-        remaining = set(
-            [
-                "normal",
-                "error",
-                "command",
-                "end",
-                "param",
-                "comment",
-                "match",
-                "selection",
-                "search_match",
-                "operator",
-                "escape",
-                "quote",
-                "redirection",
-                "valid_path",
-                "autosuggestion",
-                "user",
-                "host",
-                "cancel",
-            ]
+    def do_get_colors(self):
+        out, err = run_fish_cmd(
+            ""
+            + "if set -q __fish_initialized && test $__fish_initialized -lt 4300\n"
+            + "    echo >&2 missing migration?\n"
+            + "    exit 1\n"
+            + "end\n"
+            + "__fish_color_theme={} __fish_apply_theme 2>/dev/null\n".format(
+                TERMINAL_COLOR_THEME
+            )
+            + "or __fish_color_theme=unknown __fish_apply_theme\n"
+            + "__fish_theme_export_for_webconfig",
+            env=os.environ | {"__fish_force_load_default_theme": "1"},
         )
+        assert err == "", err
 
-        # Here are our color descriptions
-        descriptions = {
-            "normal": "Default text",
-            "command": "Ordinary commands",
-            "quote": "Text within quotes",
-            "redirection": "Like | and >",
-            "end": "Like ; and &",
-            "error": "Potential errors",
-            "param": "Command parameters",
-            "comment": "Comments start with #",
-            "match": "Matching parenthesis",
-            "selection": "Selected text",
-            "search_match": "History searching",
-            "history_current": "Directory history",
-            "operator": "Like * and ~",
-            "escape": "Escapes like \\n",
-            "cwd": "Current directory",
-            "cwd_root": "cwd for root user",
-            "valid_path": "Valid paths",
-            "autosuggestion": "Suggested completion",
-            "user": "Username in the prompt",
-            "host": "Hostname in the prompt",
-            "cancel": "The ^C cancel indicator",
-        }
-
-        # If we don't have a path, we get the current theme.
-        if not path:
-            out, err = run_fish_cmd("set -L")
-        else:
-            with open(path) as f:
-                out = f.read()
-        extrainfo = {}
-        for line in out.split("\n"):
-            # Ignore empty lines
-            if not line: continue
-            # Lines starting with "#" can contain metadata.
-            if line.startswith("#"):
-                if not ":" in line: continue
-                key, value = line.split(":", maxsplit=1)
-                key = key.strip("# '")
-                value = value.strip(" '\"")
-                # Only use keys we know
-                if not key in ("name", "preferred_background", "url"): continue
-                if key == "preferred_background":
-                    if value not in named_colors and not value.startswith("#"):
-                        value = "#" + value
-                extrainfo[key] = value
-
-
-            for match in re.finditer(r"^fish_color_(\S+) ?(.*)", line):
-                color_name, color_value = [x.strip() for x in match.group(1, 2)]
-                color_desc = descriptions.get(color_name, "")
-                data = {"name": color_name, "description": color_desc}
-                data.update(parse_color(color_value))
-                result.append(data)
-                remaining.discard(color_name)
-
-        # Sort our result (by their keys)
-        result.sort(key=operator.itemgetter("name"))
-
-        # Ensure that we have all the color names we know about, so that if the
-        # user deletes one he can still set it again via the web interface
-        for color_name in remaining:
-            color_desc = descriptions.get(color_name, "")
-            result.append([color_name, color_desc, parse_color("")])
-
-        return result, extrainfo
+        words = iter(shlex.split(out))
+        current = next(words)
+        themes = [
+            {
+                "theme": "Current",
+                "by_color_theme": {
+                    # Hack-ish: we don't know about the light/dark variants.
+                    "unknown": parse_colors(current)
+                    | {
+                        "preferred_background": "white"
+                        if TERMINAL_COLOR_THEME == "light"
+                        else "black",
+                    }
+                },
+                "terminal_color_theme": TERMINAL_COLOR_THEME,
+            }
+        ]
+        while True:
+            try:
+                theme_name = next(words)
+            except StopIteration:
+                break
+            theme = {
+                "theme": theme_name,
+            }
+            pretty_name = next(words)
+            if pretty_name:
+                theme["name"] = pretty_name
+            url = next(words)
+            if url:
+                theme["url"] = url
+            by_color_theme = {}
+            for _i in range(int(next(words))):
+                color_theme = next(words)
+                preferred_background = next(words)
+                data = next(words)
+                by_color_theme[color_theme] = parse_colors(data) | {
+                    "preferred_background": preferred_background
+                }
+            theme["by_color_theme"] = by_color_theme
+            themes += [theme]
+        return themes
 
     def do_get_functions(self):
         out, err = run_fish_cmd("functions")
         out = out.strip()
-
-        # Not sure why fish sometimes returns this with newlines
-        if "\n" in out:
-            return out.split("\n")
-        else:
-            return out.strip().split(", ")
+        return out.split("\n")
 
     def do_get_variable_names(self, cmd):
-        " Given a command like 'set -U' return all the variable names "
+        "Given a command like 'set -U' return all the variable names"
         out, err = run_fish_cmd(cmd)
         return out.split("\n")
 
@@ -1023,7 +900,7 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         ]
 
     def do_get_bindings(self):
-        """ Get key bindings """
+        """Get key bindings"""
 
         # Running __fish_config_interactive print fish greeting and
         # loads key bindings
@@ -1038,14 +915,13 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         # Put all the bindings into a list
         bindings = []
         command_to_binding = {}
-        binding_parser = BindingParser()
 
         for line in out.split("\n"):
             comps = line.split(" ", 2)
 
             # If we don't have "bind", a sequence and a mapping,
             # it's not a valid binding.
-            if len(comps) < 3:
+            if len(comps) != 3:
                 continue
 
             # Store the "--preset" value for later
@@ -1057,26 +933,20 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 preset = False
                 comps = line.split(" ", 3)[1:]
             # Check again if we removed the level.
-            if len(comps) < 3:
+            if len(comps) != 3:
                 continue
 
-            if comps[1] == "-k":
-                key_name, command = comps[2].split(" ", 1)
-                binding_parser.set_buffer(key_name.capitalize())
-            else:
-                key_name = None
-                command = comps[2]
-                binding_parser.set_buffer(comps[1])
+            key = comps[1]
+            command = comps[2]
 
             if command in bindings_blacklist:
                 continue
 
-            readable_binding = binding_parser.get_readable_binding()
             if command in command_to_binding:
                 fish_binding = command_to_binding[command]
-                fish_binding.add_binding(line, readable_binding)
+                fish_binding.add_binding(line, key)
             else:
-                fish_binding = FishBinding(command, line, readable_binding)
+                fish_binding = FishBinding(command, line, key)
                 bindings.append(fish_binding)
                 command_to_binding[command] = fish_binding
 
@@ -1090,31 +960,23 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             result.pop()  # trim off the trailing element
         return result
 
-    def do_get_color_for_variable(self, name):
-        # Return the color with the given name, or the empty string if there is
-        # none.
-        out, err = run_fish_cmd("echo -n $" + name)
-        return out
-
-    def do_set_color_for_variable(
-        self, name, color
-    ):
-        "Sets a color for a fish color name, like 'autosuggestion'"
+    def do_set_color_for_variable(self, name, color):
+        "Sets a color for a fish color name, like 'fish_color_autosuggestion'"
         if not name:
             raise ValueError
-        if not color:
+        if not color and not color == "":
             color = "normal"
-        varname = "fish_color_" + name
-        # If the name already starts with "fish_", use it as the varname
-        # This is needed for 'fish_pager_color' vars.
-        if name.startswith("fish_"):
-            varname = name
-        # TODO: Check if the varname is allowable.
-        command = "set -U " + varname
-        command += " " + color
-
-        out, err = run_fish_cmd(command)
-        return out
+        else:
+            color = unparse_color(color)
+        name = name.strip()
+        if not re.match("^[a-zA-Z0-9_]+$", name):
+            print("Refusing to use variable name: '", name, "'")
+            return
+        color = color.strip()
+        if not re.match("^[a-zA-Z0-9_= -]*$", color):
+            print("Refusing to use color value: ", color)
+            return
+        return name + " " + color
 
     def do_get_function(self, func_name):
         out, err = run_fish_cmd("functions " + func_name + " | fish_indent --html")
@@ -1130,20 +992,36 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         return True
 
     def do_set_prompt_function(self, prompt_func):
-        cmd = "functions -e fish_right_prompt; " + prompt_func + "\n" + "funcsave fish_prompt && funcsave fish_right_prompt 2>/dev/null"
+        cmd = (
+            "functions -e fish_right_prompt; "
+            + prompt_func
+            + "\n"
+            + "funcsave fish_prompt && funcsave fish_right_prompt 2>/dev/null"
+        )
         out, err = run_fish_cmd(cmd)
         return len(err) == 0
 
     def do_get_prompt(self, prompt_function_text, extras_dict):
         # Return the prompt output by the given command
-        cmd = prompt_function_text + '\n builtin cd "' + initial_wd + '" \n false \n fish_prompt\n'
+        cmd = (
+            prompt_function_text
+            + '\n builtin cd "'
+            + initial_wd
+            + '" \n false \n fish_prompt\n'
+        )
         prompt_demo_ansi, err = run_fish_cmd(cmd)
         prompt_demo_html = ansi_to_html(prompt_demo_ansi)
         right_demo_ansi, err = run_fish_cmd(
-            "functions -e fish_right_prompt; " + prompt_function_text + '\n builtin cd "' + initial_wd + '" \n false \n functions -q fish_right_prompt && fish_right_prompt\n'
+            "functions -e fish_right_prompt; "
+            + prompt_function_text
+            + '\n builtin cd "'
+            + initial_wd
+            + '" \n false \n functions -q fish_right_prompt && fish_right_prompt\n'
         )
         right_demo_html = ansi_to_html(right_demo_ansi)
-        prompt_demo_font_size = self.font_size_for_ansi_prompt(prompt_demo_ansi + right_demo_ansi)
+        prompt_demo_font_size = self.font_size_for_ansi_prompt(
+            prompt_demo_ansi + right_demo_ansi
+        )
         result = {
             "function": prompt_function_text,
             "demo": prompt_demo_html,
@@ -1157,7 +1035,9 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     def do_get_current_prompt(self):
         # Return the current prompt. We run 'false' to demonstrate how the
         # prompt shows the command status (#1624).
-        prompt_func, err = run_fish_cmd("functions fish_prompt; functions fish_right_prompt")
+        prompt_func, err = run_fish_cmd(
+            "functions fish_prompt; functions fish_right_prompt"
+        )
         result = self.do_get_prompt(
             prompt_func.strip(),
             {"name": "Current"},
@@ -1189,32 +1069,30 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
     def read_one_sample_prompt(self, path):
         try:
-            with open(path, "rb") as fd:
-                extras_dict = {}
-                # Read one sample prompt from fd
-                function_lines = []
-                parsing_hashes = True
-                unicode_lines = (line.decode("utf-8") for line in fd)
-                for line in unicode_lines:
-                    # Parse hashes until parse_one_sample_prompt_hash return
-                    # False.
-                    if parsing_hashes:
-                        parsing_hashes = self.parse_one_sample_prompt_hash(
-                            line, extras_dict
-                        )
-                    # Maybe not we're not parsing hashes, or maybe we already
-                    # were not.
-                    if not parsing_hashes:
-                        function_lines.append(line)
-                func = "".join(function_lines).strip()
-                result = self.do_get_sample_prompt(func, extras_dict)
-                return result
+            extras_dict = {}
+            # Read one sample prompt from out
+            function_lines = []
+            parsing_hashes = True
+            for line in get_embedded_file(path).splitlines(keepends=True):
+                # Parse hashes until parse_one_sample_prompt_hash return
+                # False.
+                if parsing_hashes:
+                    parsing_hashes = self.parse_one_sample_prompt_hash(
+                        line, extras_dict
+                    )
+                # Maybe not we're not parsing hashes, or maybe we already
+                # were not.
+                if not parsing_hashes:
+                    function_lines.append(line)
+            func = "".join(function_lines).strip()
+            result = self.do_get_sample_prompt(func, extras_dict)
+            return result
         except IOError:
             # Ignore unreadable files, etc.
             return None
 
     def do_get_sample_prompts_list(self):
-        paths = sorted(glob.iglob("sample_prompts/*.fish"))
+        paths = list_embedded_files("prompts", ".fish")
         result = []
         try:
             pool = multiprocessing.pool.ThreadPool(processes=8)
@@ -1235,40 +1113,6 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             result.append(self.do_get_current_prompt())
             result.extend([self.read_one_sample_prompt(path) for path in paths])
         return result
-
-    def do_get_abbreviations(self):
-        # Example abbreviation line:
-        # abbr -a -U -- ls 'ls -a'
-        result = []
-        out, err = run_fish_cmd("abbr --show")
-        for line in out.rstrip().split("\n"):
-            if not line:
-                continue
-            _, abbr = line.split(" -- ", 1)
-            word, phrase = abbr.split(" ", 1)
-            result.append({"word": word, "phrase": phrase})
-        return result
-
-    def do_remove_abbreviation(self, abbreviation):
-        out, err = run_fish_cmd("abbr --erase %s" % abbreviation["word"])
-        if err:
-            return err
-        else:
-            return None
-
-    def do_save_abbreviation(self, abbreviation):
-        out, err = run_fish_cmd(
-            # Remove one layer of single-quotes because escape_fish_cmd adds them back.
-            "abbr --add %s %s"
-            % (
-                escape_fish_cmd(abbreviation["word"].strip("'")),
-                escape_fish_cmd(abbreviation["phrase"].strip("'")),
-            )
-        )
-        if err:
-            return err
-        else:
-            return None
 
     def secure_startswith(self, haystack, needle):
         if len(haystack) < len(needle):
@@ -1310,26 +1154,7 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         self.path = p
 
         if p == "/colors/":
-            # Construct our colorschemes.
-            # Add the current scheme first, then the default.
-            # The rest in alphabetical order.
-            curcolors, curinfo = self.do_get_colors()
-            defcolors, definfo = self.do_get_colors("themes/fish default.theme")
-            curinfo.update({ "theme": "Current", "colors": curcolors})
-            definfo.update({ "theme": "fish default", "colors": defcolors})
-            output = [curinfo, definfo]
-
-            confighome = os.environ["XDG_CONFIG_HOME"] if "XDG_CONFIG_HOME" in os.environ else os.path.expanduser("~")
-            paths = list(glob.iglob(os.path.join(confighome, "fish", "themes/*.theme")))
-            paths.extend(list(glob.iglob("themes/*.theme")))
-            paths.sort(key=str.casefold)
-
-            for p in paths:
-                theme = os.path.splitext(os.path.basename(p))[0]
-                if any(theme == d["theme"] for d in output): continue
-                out, outinfo = self.do_get_colors(p)
-                outinfo.update({ "theme": theme, "colors": out })
-                output.append(outinfo)
+            output = self.do_get_colors()
         elif p == "/functions/":
             output = self.do_get_functions()
         elif p == "/variables/":
@@ -1341,13 +1166,8 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             # print "History: ", end - start
         elif p == "/sample_prompts/":
             output = self.do_get_sample_prompts_list()
-        elif re.match(r"/color/(\w+)/", p):
-            name = re.match(r"/color/(\w+)/", p).group(1)
-            output = self.do_get_color_for_variable(name)
         elif p == "/bindings/":
             output = self.do_get_bindings()
-        elif p == "/abbreviations/":
-            output = self.do_get_abbreviations()
         else:
             return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
 
@@ -1374,13 +1194,13 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         # In some cases it'll give us the encoding as well,
         # ("application/json;charset=utf-8")
         # but we don't currently care.
-        ctype = self.headers["content-type"].split(";")[0]
+        content_type = self.headers["content-type"].split(";")[0]
 
-        if ctype == "application/x-www-form-urlencoded":
+        if content_type == "application/x-www-form-urlencoded":
             length = int(self.headers["content-length"])
             url_str = self.rfile.read(length).decode("utf-8")
             postvars = parse_qs(url_str, keep_blank_values=1)
-        elif ctype == "application/json":
+        elif content_type == "application/json":
             length = int(self.headers["content-length"])
             # This used to use the provided encoding, but we use utf-8
             # all around the place and nobody has ever complained.
@@ -1390,7 +1210,7 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             # If that happens to anyone we expect bug reports.
             url_str = self.rfile.read(length).decode("utf-8")
             postvars = json.loads(url_str)
-        elif ctype == "multipart/form-data":
+        elif content_type == "multipart/form-data":
             # This used to be a thing, as far as I could find there's
             # no use anymore, but let's keep an error around just in case.
             return self.send_error(500)
@@ -1399,17 +1219,32 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
         if p == "/set_color/":
             print("# Colorscheme: " + postvars.get("theme"))
+            output = ""
+            theme_contents = []
             for item in postvars.get("colors"):
                 what = item.get("what")
                 color = item.get("color")
-
                 if what:
-                    output = self.do_set_color_for_variable(
-                        what,
-                        color,
-                    )
-            else:
-                output = "Bad request"
+                    theme_contents += [self.do_set_color_for_variable(what, color)]
+
+            varname = "__fish_webconfig_theme_notification"
+            out, err = run_fish_cmd(
+                "__fish_theme_freeze 'fish_config' {}\n".format(
+                    " ".join(escape_fish_cmd(x) for x in theme_contents)
+                )
+                + "begin\n"
+                + "    set -l i 0\n"
+                + "    if not set -q {}\n".format(varname)
+                + "        or string match -qr -- '^set-theme-v1-#(?<i>\\d+)$' ${}\n".format(
+                    varname
+                )
+                + "        set -U {} set-theme-v1-#(math $i + 1)\n".format(varname)
+                + "    end\n"
+                + "end\n"
+            )
+            assert out == "", out
+            assert err == "", err
+
         elif p == "/get_function/":
             what = postvars.get("what")
             output = [self.do_get_function(what[0])]
@@ -1425,18 +1260,6 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 output = ["OK"]
             else:
                 output = ["Unable to set prompt"]
-        elif p == "/save_abbreviation/":
-            errmsg = self.do_save_abbreviation(postvars)
-            if errmsg:
-                output = [errmsg]
-            else:
-                output = ["OK"]
-        elif p == "/remove_abbreviation/":
-            errmsg = self.do_remove_abbreviation(postvars)
-            if errmsg:
-                output = [errmsg]
-            else:
-                output = ["OK"]
         else:
             return self.send_error(404)
 
@@ -1450,11 +1273,11 @@ class FishConfigHTTPRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         self.write_to_wfile(json.dumps(output))
 
     def log_request(self, code="-", size="-"):
-        """ Disable request logging """
+        """Disable request logging"""
         pass
 
     def log_error(self, format, *args):
-        if format == "code %d, message %s" and hasattr(self, 'path'):
+        if format == "code %d, message %s" and hasattr(self, "path"):
             # This appears to be a send_error() message
             # We want to include the path (if we have one)
             (code, msg) = args
@@ -1476,11 +1299,15 @@ redirect_template_html = """
 """
 
 # find fish
-fish_bin_dir = os.environ.get("__fish_bin_dir")
+fish_bin_dir = os.environ.get("fish_bin_dir")
 fish_bin_path = None
+
+# only need the '.exe' extension on Windows
+fish_bin_name = "fish.exe" if is_windows() else "fish"
+
 if not fish_bin_dir:
-    print("The $__fish_bin_dir environment variable is not set. " "Looking in $PATH...")
-    fish_bin_path = find_executable("fish")
+    print("The $__fish_bin_dir environment variable is not set. Looking in $PATH...")
+    fish_bin_path = find_executable(fish_bin_name)
     if not fish_bin_path:
         print("fish could not be found. Is fish installed correctly?")
         sys.exit(-1)
@@ -1488,7 +1315,7 @@ if not fish_bin_dir:
         print("fish found at '%s'" % fish_bin_path)
 
 else:
-    fish_bin_path = os.path.join(fish_bin_dir, "fish")
+    fish_bin_path = os.path.join(fish_bin_dir, fish_bin_name)
 
 if not os.access(fish_bin_path, os.X_OK):
     print(
@@ -1519,12 +1346,18 @@ while PORT <= 9000:
         httpd = FishConfigTCPServer((HOST, PORT), Handler)
         # Success
         break
-    except socket.error:
-        err_type, err_value = sys.exc_info()[:2]
-        # str(err_value) handles Python3 correctly
-        if "Address already in use" not in str(err_value):
-            print(str(err_value))
-            break
+    except (OSError, socket.error) as e:
+        if e.errno == errno.EAFNOSUPPORT and HOST == "::":
+            print("Ipv6 seems to be unavailable, trying ipv4")
+            # We can't do ipv6, let's try v4.
+            HOST = "127.0.0.1"
+            PORT = 8000
+            # Override the class address_family variable (yes, this is a hack)
+            FishConfigTCPServer.address_family = socket.AF_INET
+            continue
+        if e.errno != errno.EADDRINUSE:
+            print(str(e))
+            sys.exit(-1)
     PORT += 1
 
 if PORT > 9000:
@@ -1543,7 +1376,6 @@ if len(sys.argv) > 1:
         "variables",
         "history",
         "bindings",
-        "abbreviations",
     ]:
         if tab.startswith(sys.argv[1]):
             initial_tab = "#!/" + tab
@@ -1554,26 +1386,50 @@ url = "http://localhost:%d/%s/%s" % (PORT, authkey, initial_tab)
 # Create temporary file to hold redirect to real server. This prevents exposing
 # the URL containing the authentication key on the command line (see
 # CVE-2014-2914 or https://github.com/fish-shell/fish-shell/issues/1438).
-f = tempfile.NamedTemporaryFile(prefix="web_config", suffix=".html", mode="w")
+#
+
+# If on Windows, the file needs to be closed after writing, otherwise, the browser won't be able to open it."
+# unfortunately this was added in python 3.12, so we don't add it on other platforms
+# to support older python versions there.
+kwargs = {}
+if is_windows():
+    kwargs["delete_on_close"] = False
+f = tempfile.NamedTemporaryFile(
+    prefix="web_config",
+    suffix=".html",
+    mode="w",
+    delete=True,
+    **kwargs,
+)
 
 f.write(redirect_template_html % (url, url))
 f.flush()
+
+if is_windows():
+    f.close()
 
 # Open temporary file as URL
 # Use open on macOS >= 10.12.5 to work around #4035.
 fileurl = "file://" + f.name
 
-esc = get_special_ansi_escapes()
+if is_windows():
+    fileurl = fileurl.replace("\\", "/")
+
 print(
     "Web config started at %s%s%s"
-    % (esc["underline"], fileurl, esc["exit_attribute_mode"])
+    % (ENTER_UNDERLINE_MODE, fileurl, EXIT_ATTRIBUTE_MODE)
 )
-print("%sHit ENTER to stop.%s" % (esc["bold"], esc["exit_attribute_mode"]))
+print(
+    "If that doesn't work, try opening %s%s%s"
+    % (ENTER_UNDERLINE_MODE, url, EXIT_ATTRIBUTE_MODE)
+)
+print("%sHit ENTER to stop.%s" % (ENTER_BOLD_MODE, EXIT_ATTRIBUTE_MODE))
 
 
 def runThing():
-    if isMacOS10_12_5_OrLater():
-        subprocess.check_call(["open", fileurl])
+    if os.environ.get("BROWSER") == "true":
+        # Don't start a browser in this case (see issue #11926)
+        pass
     elif is_wsl():
         cmd_path = find_executable("cmd.exe", COMMON_WSL_CMD_PATHS)
         if cmd_path:
@@ -1585,6 +1441,8 @@ def runThing():
         subprocess.call(["termux-open-url", url])
     elif is_chromeos_garcon():
         webbrowser.open(url)
+    elif is_sailfish_os():
+        subprocess.call(["xdg-open", url])
     else:
         webbrowser.open(fileurl)
 
@@ -1601,13 +1459,63 @@ httpd.daemon_threads = True
 
 # Select on stdin and httpd
 stdin_no = sys.stdin.fileno()
-try:
+
+
+def create_socket(start_port, end_port):
+    """Attempt to create a socket from a range of ports."""
+    for port in range(start_port, end_port + 1):
+        try:
+            sck = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sck.bind(("localhost", port))
+            sck.listen()
+            return (sck, port)
+        except socket.error:
+            pass
+    print("Unable to find an open port between {} and {}.".format(start_port, end_port))
+    sys.exit(-1)
+
+
+def capture_enter(port):
+    """Read keyboard events and establish a socket connection when pressing the Enter."""
+    import msvcrt
+
     while True:
-        ready_read = select.select([sys.stdin.fileno(), httpd.fileno()], [], [])
-        if ready_read[0][0] < 1:
+        if msvcrt.kbhit():
+            key = msvcrt.getch().decode()
+            if key == "\r" or key == "\n":
+                break
+    sck = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sck.connect(("localhost", port))
+
+
+def get_windows_signal():
+    """Using socket as a replacement for stdin on Windows."""
+    # The intent is to get a free port between 8000 and 9000, like for the HTTP
+    # server. But we already know that port 8000..PORT are not available. So
+    # starting from `PORT+1` is more efficient.
+    # More importantly though, Windows allows multiple sockets to bind to the
+    # same port in some circumstances (see SO_EXCLUSIVEADDRUSE documentation),
+    # and thus allows the signal socket to bind to the same port as HTTP.
+    # A browser may then end up reaching the wrong socket and causing
+    # fish_config to shutdown prematurely.
+    (sig, sig_port) = create_socket(PORT + 1, 9000)
+    threading.Thread(target=capture_enter, args=(sig_port,)).start()
+    return sig
+
+
+try:
+    httpd_fileno = httpd.fileno()
+    sig = get_windows_signal() if is_windows() else sys.stdin
+    sig_fileno = sig.fileno()
+    while True:
+        ready_read = select.select([sig_fileno, httpd_fileno], [], [])
+        if ready_read[0][0] != httpd_fileno:
             print("Shutting down.")
-            # Consume the newline so it doesn't get printed by the caller
-            sys.stdin.readline()
+
+            # On windows the newline has already been consumed by the capture_enter function.
+            if not is_windows():
+                # Consume the newline so it doesn't get printed by the caller
+                sys.stdin.readline()
             break
         else:
             httpd.handle_request()
@@ -1615,5 +1523,8 @@ except KeyboardInterrupt:
     print("\nShutting down.")
 
 # Clean up temporary file
-f.close()
+# If on Windows, the file already closed
+if not is_windows():
+    f.close()
+
 thread.join()

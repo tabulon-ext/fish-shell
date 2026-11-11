@@ -1,16 +1,14 @@
-.. _cmd-count:
-
 count - count the number of elements of a list
 ================================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    count $VARIABLE
+    count STRING1 STRING2 ...
     COMMAND | count
-    count < FILE
+    count [...] < FILE
 
 Description
 -----------
@@ -32,7 +30,7 @@ Example
 
     count $PATH
     # Returns the number of directories in the users PATH variable.
-    
+
     count *.txt
     # Returns the number of files in the current working directory
     # ending with the suffix '.txt'.

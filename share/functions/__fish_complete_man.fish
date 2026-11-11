@@ -1,10 +1,10 @@
-
+# localization: skip(private)
 function __fish_complete_man
     # Try to guess what section to search in. If we don't know, we
     # use [^)]*, which should match any section.
     set -l section ""
     set -l token (commandline -ct)
-    set -l prev (commandline -poc)
+    set -l prev (commandline -pxc)
     set -e prev[1]
     while set -q prev[1]
         switch $prev[1]
@@ -32,18 +32,16 @@ function __fish_complete_man
 
     if test -n "$token"
         # Do the actual search
-        __fish_apropos $token 2>/dev/null | awk '
+        __fish_apropos ^$token 2>/dev/null | awk '
                 BEGIN { FS="[\t ]- "; OFS="\t"; }
                 # BSD/Darwin
-                /^[^( \t]+\('$section'\)/ {
-                  split($1, pages, ", ");
+                /^[^( \t]+(, [^( \t]+)*\('$section'\)/ {
+                  paren = index($1, "(");
+                  sect = substr($1, paren + 1, length($1) - paren - 1);
+                  aliases = substr($1, 1, paren - 1)
+                  split(aliases, pages, ", ");
                   for (i in pages) {
-                    page = pages[i];
-                    sub(/[ \t]+/, "", page);
-                    paren = index(page, "(");
-                    name = substr(page, 1, paren - 1);
-                    sect = substr(page, paren + 1, length(page) - paren - 1);
-                    print name, sect ": " $2;
+                    print pages[i], sect ": " $2
                   }
                 }
                 # man-db
@@ -72,8 +70,7 @@ function __fish_complete_man
 
         # Fish commands are not given by apropos
         if not set -ql exclude_fish_commands
-            set -l files $__fish_data_dir/man/man1/*.1
-            string replace -r '.*/([^/]+)\.1$' '$1\t1: fish command' -- $files
+            string join \n -- (__fish_man1_pages)\t'1: fish command'
         end
     else
         return 1

@@ -1,9 +1,5 @@
-#RUN: %fish -C 'set -g fish %fish' %s
-
-set -gx XDG_CONFIG_HOME (mktemp -d)
-set -gx XDG_DATA_HOME $XDG_CONFIG_HOME
-mkdir -p $XDG_CONFIG_HOME/fish
-
+# RUN: fish=%fish %fish %s
+# REQUIRES: %fish -c "not cygwin_nosymlinks"
 
 # fish_variables
 set -l target_file $XDG_CONFIG_HOME/fish/target_fish_variables
@@ -23,7 +19,7 @@ else
     echo fish_variables is still a symlink
 end
 # CHECK: fish_variables is still a symlink
-
+rm $fish_variables
 
 # fish_history
 set -l history_file $XDG_DATA_HOME/fish/fish_history
@@ -47,3 +43,4 @@ else
     echo fish_history is still a symlink
 end
 # CHECK: fish_history is still a symlink
+rm $history_file

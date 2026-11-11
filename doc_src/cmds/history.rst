@@ -1,19 +1,21 @@
-.. _cmd-history:
-
 history - show and manipulate command history
 =============================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    history [ search ] [ --show-time ] [ --case-sensitive ] [ --exact | --prefix | --contains ] [ --max=n ] [ --null ] [ -R | --reverse ] [ "search string"... ]
-    history delete [ --show-time ] [ --case-sensitive ] [ --exact | --prefix | --contains ] "search string"...
+    history [search] [--show-time] [--case-sensitive]
+                     [--exact | --prefix | --contains] [--max N] [--null] [--reverse]
+                     [SEARCH_STRING ...]
+    history delete [--case-sensitive]
+                   [--exact | --prefix | --contains] SEARCH_STRING ...
     history merge
     history save
     history clear
-    history ( -h | --help )
+    history clear-session
+    history append COMMAND ...
 
 Description
 -----------
@@ -22,37 +24,63 @@ Description
 
 The following operations (sub-commands) are available:
 
-- ``search`` returns history items matching the search string. If no search string is provided it returns all history items. This is the default operation if no other operation is specified. You only have to explicitly say ``history search`` if you wish to search for one of the subcommands. The ``--contains`` search option will be used if you don't specify a different search option. Entries are ordered newest to oldest unless you use the ``--reverse`` flag. If stdout is attached to a tty the output will be piped through your pager by the history function. The history builtin simply writes the results to stdout.
+**search**
+    Returns history items matching the search string. If no search string is provided it returns all history items. This is the default operation if no other operation is specified. You only have to explicitly say ``history search`` if you wish to search for one of the subcommands. The ``--contains`` search option will be used if you don't specify a different search option. Entries are ordered newest to oldest unless you use the ``--reverse`` flag. If stdout is attached to a tty the output will be piped through your pager by the history function. The history builtin writes the results to stdout.
 
-- ``delete`` deletes history items. The ``--contains`` search option will be used if you don't specify a different search option. If you don't specify ``--exact`` a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word "all" to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID separated by a space to delete multiple entries. Just press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports ``--exact --case-sensitive`` deletion.
+**delete**
+    Deletes history items. The ``--contains`` search option will be used if you don't specify a different search option. If you don't specify ``--exact`` a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word "all" to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID, or an ID range separated by a space to delete multiple entries. Press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports ``--exact --case-sensitive`` deletion.
 
-- ``merge`` immediately incorporates history changes from other sessions. Ordinarily ``fish`` ignores history changes from sessions started after the current one. This command applies those changes immediately.
+**merge**
+    Immediately incorporates history changes from other sessions. Ordinarily ``fish`` ignores history changes from sessions started after the current one. This command applies those changes immediately.
 
-- ``save`` immediately writes all changes to the history file. The shell automatically saves the history file; this option is provided for internal use and should not normally need to be used by the user.
+**save**
+    Immediately writes all changes to the history file. The shell automatically saves the history file; this option is provided for internal use and should not normally need to be used by the user.
 
-- ``clear`` clears the history file. A prompt is displayed before the history is erased asking you to confirm you really want to clear all history unless ``builtin history`` is used.
+**clear**
+    Clears the history file. A prompt is displayed before the history is erased asking you to confirm you really want to clear all history unless ``builtin history`` is used.
+
+**clear-session**
+    Clears the history file from all activity of the current session. Note: If ``history merge`` or ``builtin history merge`` is run in a session, only the history after this will be erased.
+
+**append**
+    Appends commands to the history without needing to execute them.
 
 The following options are available:
 
 These flags can appear before or immediately after one of the sub-commands listed above.
 
-- ``-C`` or ``--case-sensitive`` does a case-sensitive search. The default is case-insensitive. Note that prior to fish 2.4.0 the default was case-sensitive.
+**-C** or **--case-sensitive**
+    Does a case-sensitive search. The default is case-insensitive.
 
-- ``-c`` or ``--contains`` searches or deletes items in the history that contain the specified text string. This is the default for the ``--search`` flag. This is not currently supported by the ``delete`` subcommand.
+**-c** or **--contains**
+    Searches items in the history that contain the specified text string. This is the default for the **--search** flag. This is not currently supported by the **delete** subcommand.
 
-- ``-e`` or ``--exact`` searches or deletes items in the history that exactly match the specified text string. This is the default for the ``delete`` subcommand. Note that the match is case-insensitive by default. If you really want an exact match, including letter case, you must use the ``-C`` or ``--case-sensitive`` flag.
+**-e** or **--exact**
+    Searches or deletes items in the history that exactly match the specified text string. This is the default for the **delete** subcommand. Note that the match is case-insensitive by default. If you really want an exact match, including letter case, you must use the **-C** or **--case-sensitive** flag.
 
-- ``-p`` or ``--prefix`` searches or deletes items in the history that begin with the specified text string. This is not currently supported by the ``--delete`` flag.
+**-p** or **--prefix**
+    Searches items in the history that begin with the specified text string. This is not currently supported by the **delete** subcommand.
 
-- ``-t`` or ``--show-time`` prepends each history entry with the date and time the entry was recorded. By default it uses the strftime format ``# %c%n``. You can specify another format; e.g., ``--show-time="%Y-%m-%d %H:%M:%S "`` or ``--show-time="%a%I%p"``. The short option, ``-t``, doesn't accept a strftime format string; it only uses the default format. Any strftime format is allowed, including ``%s`` to get the raw UNIX seconds since the epoch.
+.. _history-show-time:
 
-- ``-z`` or ``--null`` causes history entries written by the search operations to be terminated by a NUL character rather than a newline. This allows the output to be processed by ``read -z`` to correctly handle multiline history entries.
+**-t** or **--show-time**
+    Prepends each history entry with the date and time the entry was recorded. By default it uses the strftime format ``# %c%n``. You can specify another format; e.g., ``--show-time="%Y-%m-%d %H:%M:%S "`` or ``--show-time="%a%I%p"``. The short option, **-t**, doesn't accept a strftime format string; it only uses the default format. Any strftime format is allowed, including ``%s`` to get the raw UNIX seconds since the epoch.
 
-- ``-<number>`` ``-n <number>`` or ``--max=<number>`` limits the matched history items to the first "n" matching entries. This is only valid for ``history search``.
+**-z** or **--null**
+    Causes history entries written by the search operations to be terminated by a NUL character rather than a newline. This allows the output to be processed by ``read -z`` to correctly handle multiline history entries.
 
-- ``-R`` or ``--reverse`` causes the history search results to be ordered oldest to newest. Which is the order used by most shells. The default is newest to oldest.
+**-**\*NUMBER* **-n** *NUMBER* or **--max** *NUMBER*
+    Limits the matched history items to the first *NUMBER* matching entries. This is only valid for ``history search``.
 
-- ``-h`` or ``--help`` display help for this command.
+**-R** or **--reverse**
+    Causes the history search results to be ordered oldest to newest. Which is the order used by most shells. The default is newest to oldest.
+
+**--color** *WHEN*
+    Controls when to use syntax highlighting colors for the history entries.
+    *WHEN* can be ``auto`` (the default, colorize if the output :doc:`is a terminal <isatty>`), ``always``, or ``never``.
+
+**-h** or **--help**
+    Displays help for this command.
 
 Example
 -------
@@ -63,10 +91,10 @@ Example
 
     history clear
     # Deletes all history items
-    
+
     history search --contains "foo"
     # Outputs a list of all previous commands containing the string "foo".
-    
+
     history delete --prefix "foo"
     # Interactively deletes commands which start with "foo" from the history.
     # You can select more than one entry by entering their IDs separated by a space.
@@ -81,11 +109,11 @@ You can set the ``fish_history`` variable to another name for the current shell 
 
 You can change ``fish_history`` at any time (by using ``set -x fish_history "session_name"``) and it will take effect right away. If you set it to ``"default"``, it will use the default session name (which is ``"fish"``).
 
-Other shells such as bash and zsh use a variable named ``HISTFILE`` for a similar purpose. Fish uses a different name to avoid conflicts and signal that the behavior is different (session name instead of a file path). Also, if you set the var to anything other than ``fish`` or ``default`` it will inhibit importing the bash history. That's because the most common use case for this feature is to avoid leaking private or sensitive history when giving a presentation.
+Other shells such as bash and zsh use a variable named ``HISTFILE`` for a similar purpose. fish uses a different name to avoid conflicts and signal that the behavior is different (session name instead of a file path). Also, if you set the var to anything other than ``fish`` or ``default`` it will inhibit importing the bash history. That's because the most common use case for this feature is to avoid leaking private or sensitive history when giving a presentation.
 
 Notes
 -----
 
-If you specify both ``--prefix`` and ``--contains`` the last flag seen is used.
+If you specify both **--prefix** and **--contains** the last flag seen is used.
 
 Note that for backwards compatibility each subcommand can also be specified as a long option. For example, rather than ``history search`` you can type ``history --search``. Those long options are deprecated and will be removed in a future release.

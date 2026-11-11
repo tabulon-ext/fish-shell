@@ -22,7 +22,6 @@ complete -c rsync -s q -l quiet -d "Suppress non-error messages"
 complete -c rsync -l no-motd -d "Suppress daemon-mode MOTD"
 complete -c rsync -s c -l checksum -d "Skip based on checksum, not mod-time & size"
 complete -c rsync -s a -l archive -d "Archive mode; same as -rlptgoD (no -H)"
-complete -c rsync -l no-OPTION -d "Turn off an implied OPTION (e.g. --no-D)"
 complete -c rsync -s r -l recursive -d "Recurse into directories"
 complete -c rsync -s R -l relative -d "Use relative path names"
 complete -c rsync -l no-implied-dirs -d "Don’t send implied dirs with --relative"
@@ -31,7 +30,7 @@ complete -c rsync -l backup-dir -xa '(__fish_complete_directories)' -d "Make bac
 complete -c rsync -l suffix -d "Backup suffix (default ~ w/o --backup-dir)"
 complete -c rsync -s u -l update -d "Skip files that are newer on the receiver"
 complete -c rsync -l inplace -d "Update destination files in-place"
-complete -c rsync -l append -d "Append data onto shorter files without verifing old content"
+complete -c rsync -l append -d "Append data onto shorter files without verifying old content"
 complete -c rsync -l append-verify -d "Append with full file checksum, including old data"
 complete -c rsync -s d -l dirs -d "Transfer directories without recursing"
 complete -c rsync -l mkpath -d "Create the destination's path component"
@@ -106,7 +105,7 @@ complete -c rsync -l modify-window -xa '(seq 0 10)' -d "Compare NUM mod-times wi
 complete -c rsync -s T -l temp-dir -xa '(__fish_complete_directories)' -d "Create temporary files in directory DIR"
 complete -c rsync -s y -l fuzzy -d "Find similar file for basis if no dest file"
 complete -c rsync -l compare-dest -xa '(__fish_complete_directories)' -d "Also compare received files relative to DIR"
-complete -c rsync -l copy-dest -xa '(__fish_complete_directories)' -d "Also compare received files relative to DIR and include copies of unchanged files"
+complete -c rsync -l copy-dest -xa '(__fish_complete_directories)' -d "Like compare-dest but also copies unchanged files"
 complete -c rsync -l link-dest -xa '(__fish_complete_directories)' -d "Hardlink to files in DIR when unchanged"
 complete -c rsync -s z -l compress -d "Compress file data during the transfer"
 complete -c rsync -l zc -l compress-choice -xa 'zstd lz4 zlibx zlib none' -d "Choose the compression algorithm"
@@ -166,8 +165,8 @@ complete -c rsync -d Hostname -a "
 (__fish_print_hostnames):
 
 (
-	# Prepend any username specified in the completion to the hostname.
-	commandline -ct |sed -ne 's/\(.*@\).*/\1/p'
+    # Prepend any username specified in the completion to the hostname.
+    commandline -ct |sed -ne 's/\(.*@\).*/\1/p'
 )(__fish_print_hostnames):
 
 (__fish_print_users)@\tUsername
@@ -176,14 +175,39 @@ complete -c rsync -d Hostname -a "
 #
 # Remote path
 #
+# Unfortunately, the escaping changed in version 3.2.4.
+# Even more unfortunate, rsync's version output is horrible:
+# rsync  version v3.2.4  protocol version 31
+# Copyright (C) 1996-2022 by Andrew Tridgell, Wayne Davison, and others.
+# Web site: https://rsync.samba.org/
+# ... (and then a ton of lines about capabilities)
+#
+# This includes multiple spaces, the version might start with "v" depending on whether it's
+# built from a git tag or not, and it may contain a pre-release suffix or a trailing git
+# commit to it. For example, on Arch at the time of writing the version line is:
+# rsync  version 3.5.0-g471e17dc  protocol version 32
+
+# Assume new escaping style introduced in 3.2.4
+set -l new_escaping true
+
+set -l rsync_ver (rsync --version |
+                  string replace -rf '^rsync +version\D+([\d.]+).*' '$1' |
+                  string split .)
+
+if test "$rsync_ver[1]" -lt 3
+    or test "$rsync_ver[1]" -eq 3 -a "$rsync_ver[2]" -lt 2
+    or test "$rsync_ver[1]" -eq 3 -a "$rsync_ver[2]" -eq 2 -a "$rsync_ver[3]" -lt 4
+    set new_escaping false
+end
+
 complete -c rsync -d "Remote path" -n "commandline -ct | string match -q '*:*'" -xa "
 (
-	# Prepend any user@host:/path information supplied before the remote completion.
+    # Prepend any user@host:/path information supplied before the remote completion.
         __rsync_remote_target
 )(
-	# Get the list of remote files from the specified rsync server.
+    # Get the list of remote files from the specified rsync server.
         rsync --list-only (__rsync_remote_target) 2>/dev/null | string replace -r '^d.*' '\$0/' |
-        string replace -r '(\S+\s+){4}' '' | # drop the first four columns
-        string escape -n
+        string replace -r '(\S+\s+){4}' '' |
+        string match --invert './' $($new_escaping; or echo ' | string escape -n'; echo)
 )
 "

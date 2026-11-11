@@ -1,9 +1,13 @@
 # RUN: %fish %s
 
+printf "%d %d\n" 1 2 3
+# CHECK: 1 2
+# CHECK: 3 0
+
 printf "Hello %d %i %f %F %g %G\n" 1 2 3 4 5 6
 # CHECK: Hello 1 2 3.000000 4.000000 5 6
 
-printf "%x %X %o %llu\n" 10 11 8 -1
+printf "%x %X %o %u\n" 10 11 8 -1
 # CHECK: a B 10 18446744073709551615
 
 # %a has OS-dependent output - see #1139
@@ -26,6 +30,12 @@ printf "%-20d%d\n" 5 10
 
 printf "%*d\n" 10 100
 # CHECK:       100
+
+printf "%*s\n" 2147483648 abc
+# CHECKERR: invalid field width: 2147483648
+
+printf "%*s\n" -2147483649 abc
+# CHECKERR: invalid field width: -2147483649
 
 printf "%%\"\\\n"
 printf "%s\b%s\n" x y
@@ -66,7 +76,7 @@ printf '%e\n' "1.23" # should succeed, output should be 1.230000e+00
 
 printf '%e\n' "2,34" # should fail
 # CHECK: 2.000000e+00
-# CHECKERR: 2,34: value not completely converted
+# CHECKERR: 2,34: value not completely converted (can't convert ',34')
 
 # Verify long long ints are handled correctly. See issue #3352.
 printf 'long hex1 %x\n' 498216206234
@@ -76,9 +86,11 @@ printf 'long hex2 %X\n' 498216206234
 printf 'long hex3 %X\n' 0xABCDEF1234567890
 # CHECK: long hex3 ABCDEF1234567890
 printf 'long hex4 %X\n' 0xABCDEF12345678901
+printf '\n'
+# CHECK: long hex4
 # CHECKERR: 0xABCDEF12345678901: Number out of range
 printf 'long decimal %d\n' 498216206594
-# CHECK: long hex4 long decimal 498216206594
+# CHECK: long decimal 498216206594
 printf 'long signed %d\n' -498216206595
 # CHECK: long signed -498216206595
 printf 'long signed to unsigned %u\n' -498216206596
@@ -92,6 +104,109 @@ echo $status
 # Verify numeric conversion still happens even if it couldn't be fully converted
 printf '%d\n' 15.1
 # CHECK: 15
-# CHECKERR: 15.1: value not completely converted
+# CHECKERR: 15.1: value not completely converted (can't convert '.1')
 echo $status
 # CHECK: 1
+
+printf '%d\n' 07
+# CHECK: 7
+echo $status
+# CHECK: 0
+printf '%d\n' 08
+# CHECK: 0
+# CHECKERR: 08: value not completely converted (can't convert '8')
+# CHECKERR: Hint: a leading '0' without an 'x' indicates an octal number
+echo $status
+# CHECK: 1
+
+printf '%d\n' 0f
+# CHECK: 0
+# CHECKERR: 0f: value not completely converted (can't convert 'f')
+# CHECKERR: Hint: a leading '0' without an 'x' indicates an octal number
+echo $status
+# CHECK: 1
+
+printf '%d\n' 0g
+# CHECK: 0
+# CHECKERR: 0g: value not completely converted (can't convert 'g')
+echo $status
+# CHECK: 1
+
+printf '%d\n' abc
+# CHECKERR: abc: expected a numeric value
+
+printf '%d\n' ""
+# CHECK: 0
+
+printf '%f\n' 0x2
+# CHECK: 2.000000
+
+printf '%f\n' 0x2p3
+# CHECK: 16.000000
+
+printf '%.1f\n' -0X1.5P8
+# CHECK: -336.0
+
+printf '%.*f\n' 2147483648 1
+# CHECKERR: invalid precision: 2147483648
+
+printf '%lb\n' 1
+# CHECKERR: %lb: invalid conversion specification
+
+# Test that we ignore options
+printf -a
+printf --foo
+# CHECK: -a--foo
+echo
+
+set -l helpvar --help
+printf $helpvar
+echo
+# CHECK: --help
+
+printf --help
+echo
+# CHECK: --help
+
+# This is how mc likes to encode the directory we should cd to.
+printf '%b\n' '\0057foo\0057bar\0057'
+# CHECK: /foo/bar/
+
+printf %18446744073709551616s
+# CHECKERR: Number out of range
+
+# Test non-ASCII behavior
+printf '|%3s|\n' ö
+# CHECK: |  ö|
+printf '|%3s|\n' '🇺🇳'
+#CHECK: | 🇺🇳|
+printf '|%.3s|\n' '🇺🇳🇺🇳'
+#CHECK: |🇺🇳|
+printf '|%.3s|\n' 'a🇺🇳'
+#CHECK: |a🇺🇳|
+printf '|%.3s|\n' 'aa🇺🇳'
+#CHECK: |aa|
+printf '|%3.3s|\n' 'aa🇺🇳'
+#CHECK: | aa|
+printf '|%.1s|\n' 𒈙a
+#CHECK: |𒈙|
+printf '|%3.3s|\n' '👨‍👨‍👧‍👧'
+#CHECK: | 👨‍👨‍👧‍👧|
+
+printf '\xxyz'
+# CHECKERR: missing hexadecimal number in escape
+printf '\uxyz'
+# CHECKERR: Missing hexadecimal number in Unicode escape
+
+# Check handling of chars we use in our internal PUA encoding.
+printf '\uf641' | display_bytes
+# CHECK: 0000000 357 231 201
+# CHECK: 0000003
+
+printf '\U110000'
+# CHECKERR: Not a valid Unicode character: \U00110000
+
+# UTF-8 representation of \uf641
+printf '%s' \xef\x99\x81 | display_bytes
+# CHECK: 0000000 357 231 201
+# CHECK: 0000003

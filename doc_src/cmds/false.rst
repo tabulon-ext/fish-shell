@@ -1,12 +1,10 @@
-.. _cmd-false:
-
 false - return an unsuccessful result
 =====================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
     false
 
@@ -18,5 +16,5 @@ Description
 See Also
 --------
 
-- :ref:`true <cmd-true>` command
+- :doc:`true <true>` command
 - :ref:`$status <variables-status>` variable

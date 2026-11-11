@@ -1,12 +1,10 @@
-.. _cmd-printf:
-
 printf - display text according to a format string
 ==================================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
     printf FORMAT [ARGUMENT ...]
 
@@ -16,16 +14,15 @@ Description
 .. only:: builder_man
 
           NOTE: This page documents the fish builtin ``printf``.
-          To see the documentation on the ``printf`` command you might have,
-          use ``command man printf``.
+          To see the documentation on any non-fish versions, use ``command man printf``.
 
-printf uses the format string FORMAT to print the ARGUMENT arguments. This means that it takes format specifiers in the format string and replaces each with an argument.
+``printf`` uses the format string *FORMAT* to print the *ARGUMENT* arguments. This means that it takes format specifiers in the format string and replaces each with an argument.
 
-The ``format`` argument is re-used as many times as necessary to convert all of the given arguments. So ``printf %s\n flounder catfish clownfish shark`` will print four lines.
+The *FORMAT* argument is re-used as many times as necessary to convert all of the given arguments. So ``printf %s\n flounder catfish clownfish shark`` will print four lines.
 
-Unlike :ref:`echo <cmd-echo>`, ``printf`` does not append a new line unless it is specified as part of the string.
+Unlike :doc:`echo <echo>`, ``printf`` does not append a new line unless it is specified as part of the string.
 
-It doesn't support any options, so there is no need for a ``--`` separator, which makes it easier to use for arbitrary input than ``echo``. [#]_ 
+It doesn't support any options, so there is no need for a ``--`` separator, which makes it easier to use for arbitrary input than ``echo``. [#]_
 
 Format Specifiers
 -----------------
@@ -99,7 +96,7 @@ Will print "Number of bananas in my pocket: 42", `without` a newline.
 See Also
 --------
 
-- the :ref:`echo <cmd-echo>` command, for simpler output
+- the :doc:`echo <echo>` command, for simpler output
 
 Footnotes
 ---------

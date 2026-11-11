@@ -1,8 +1,8 @@
 function __fish_complete_setxkbmap --description 'Complete setxkb options' --argument-names what
-    sed -e "1,/! $what/d" -e '/^\s*$/,$d' /usr/share/X11/xkb/rules/xorg.lst | sed -r 's/\s+(\S+)\s+(.+)/\1\t\2/'
+    sed -e "1,/! $what/d" -e '/^[[:space:]]*$/,$d' /usr/share/X11/xkb/rules/xorg.lst | sed -r 's/[[:space:]]+([^[:space:]]+)[[:space:]]+(.+)/\1\t\2/'
 end
 
-set -l filter '"s/\S+\s\S+\s(.+)\((.+)\)/\1\t\2/;"'
+set -l filter '"s/[^[:space:]]+[[:space:]][^[:space:]]+[[:space:]](.+)\((.+)\)/\1\t\2/;"'
 
 complete -c setxkbmap -o '?' -o help -d 'Print this message'
 complete -c setxkbmap -o compat -d 'Specifies compatibility map component name' -xa "(sed -r $filter /usr/share/X11/xkb/compat.dir)"
@@ -15,7 +15,7 @@ complete -c setxkbmap -o keycodes -d 'Specifies keycodes component name' -xa "(s
 complete -c setxkbmap -o keymap -d 'Specifies name of keymap to load' -xa "(sed -r $filter /usr/share/X11/xkb/keymap.dir)"
 complete -c setxkbmap -o layout -d 'Specifies layout used to choose component names' -xa "(__fish_complete_setxkbmap layout)"
 complete -c setxkbmap -o model -d 'Specifies model used to choose component names' -xa "(__fish_complete_setxkbmap model)"
-complete -c setxkbmap -o option -d 'Adds an option used to choose component names' -xa "(__fish_complete_list , '__fish_complete_setxkbmap option')"
+complete -c setxkbmap -o option -d 'Adds an option used to choose component names' -xa "(__fish_stripprefix='^--option=' __fish_complete_list , '__fish_complete_setxkbmap option')"
 complete -c setxkbmap -o print -d 'Print a complete xkb_keymap description and exit'
 complete -c setxkbmap -o query -d 'Print the current layout settings and exit'
 complete -c setxkbmap -o rules -d 'Name of rules file to use' -x

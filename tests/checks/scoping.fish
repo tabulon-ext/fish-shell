@@ -241,8 +241,7 @@ echo 7 $status # no passthrough
 #CHECK: 7 4
 false
 set -h >/dev/null
-# CHECKERR: fish: Missing man page {{.*}}
-# CHECKERR: `help '{{.*}}'` will open the online version.
+# CHECKERR: Documentation for set
 
 echo 8 $status # no passthrough
 #CHECK: 8 0

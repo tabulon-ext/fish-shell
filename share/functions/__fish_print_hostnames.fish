@@ -1,3 +1,4 @@
+# localization: skip(private)
 function __fish_print_hostnames -d "Print a list of known hostnames"
     # This function used to primarily query `getent hosts` and only read from `/etc/hosts` if
     # `getent` did not exist or `getent hosts` failed, based off the (documented) assumption that
@@ -7,19 +8,14 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
     # order is now reversed and `getent hosts` is only used if the hosts file is not found at
     # `/etc/hosts` for portability reasons.
 
-    begin
-        test -r /etc/hosts && read -z </etc/hosts
+    __fish_print_hostnames_from_hosts (
+        test -r /etc/hosts && read -z </etc/hosts | string replace -r '#.*$' ''
         or type -q getent && getent hosts 2>/dev/null
-    end |
-        # Ignore comments, own IP addresses (127.*, 0.0[.0[.0]], ::1), non-host IPs (fe00::*, ff00::*),
-        # and leading/trailing whitespace. Split results on whitespace to handle multiple aliases for
-        # one IP.
-        string replace -irf '^\s*?(?!(?:#|0\.|127\.|ff0|fe0|::1))\S+\s*(.*?)\s*$' '$1' |
-        string split ' '
+    )
 
     # Print nfs servers from /etc/fstab
     if test -r /etc/fstab
-        string match -r '^\s*[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3]:|^[a-zA-Z\.]*:' </etc/fstab |
+        string match -r '^\s*[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:|^[a-zA-Z\.]*:' </etc/fstab |
             string replace -r ':.*' ''
     end
 
@@ -38,7 +34,7 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
     if functions -q ssh
         # Get alias and commandline options.
         set -l ssh_func_tokens (functions ssh | string match '*command ssh *' | string split ' ')
-        set -l ssh_command $ssh_func_tokens (commandline -cpo)
+        set -l ssh_command $ssh_func_tokens (commandline -cpx)
         # Extract ssh config path from last -F short option.
         if contains -- -F $ssh_command
             set -l ssh_config_path_is_next 1
@@ -76,6 +72,11 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
 
             set -l new_paths
             for path in $paths
+                # while ssh_config is using brackets to resolve env, they should be removed
+                # example
+                # in ssh_config: ${SOME_PATH}
+                # in fish:       $SOME_PATH
+                set path (string replace -r '\${([^}]+)}' '$1' $path)
                 set -l expanded_path
                 # Scope "relative" paths in accordance to ssh path resolution
                 if string match -qrv '^[~/]' $path
@@ -111,7 +112,7 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
             # Multiple names for a single host can be given separated by spaces, so just split it explicitly (#6698).
             string replace -rfi '^\s*Host\s+(\S.*?)\s*$' '$1' -- $contents | string split " " | string match -rv '[\*\?]'
             # Also extract known_host paths.
-            set known_hosts $known_hosts (string replace -rfi '.*KnownHostsFile\s*' '' -- $contents)
+            set known_hosts $known_hosts (string replace -rfi '.*KnownHostsFile\s*' '' -- $contents | string split " ")
         end
     end
 
@@ -134,4 +135,13 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
         string split ',' | string replace -r '\[?([^\]]+).*' '$1'
 
     return 0
+end
+
+function __fish_print_hostnames_from_hosts -d "Extract hostnames from hosts file entries"
+    # Ignore own IP addresses (127.*, 0.0[.0[.0]], ::1), broadcast addresses
+    # (255.255.255.255), non-host IPs (fe00::*, ff00::*), and leading/trailing
+    # whitespace.
+    string replace -irf -- '^\s*?(?!(?:0\.|127\.|ff0|fe0|255\.255\.255\.255|::1))\S+\s*(.*?)\s*$' '$1' $argv |
+        # Split results on whitespace to handle multiple aliases for one IP.
+        string split ' '
 end

@@ -1,4 +1,5 @@
-function prompt_pwd --description 'Print the current working directory, shortened to fit the prompt'
+# localization: tier1
+function prompt_pwd --description 'short CWD for the prompt'
     set -l options h/help d/dir-length= D/full-length-dirs=
     argparse -n prompt_pwd $options -- $argv
     or return
@@ -19,15 +20,14 @@ function prompt_pwd --description 'Print the current working directory, shortene
 
     set -l fulldirs 0
     set -ql _flag_D
-    and set fish_prompt_pwd_full_dirs $_flag_D
+    and set -l fish_prompt_pwd_full_dirs $_flag_D
 
     set -q fish_prompt_pwd_full_dirs
     or set -l fish_prompt_pwd_full_dirs 1
 
     for path in $argv
-        # Replace $HOME with "~"
-        set -l realhome ~
-        set -l tmp (string replace -r '^'"$realhome"'($|/)' '~$1' $path)
+        # Strip control characters to avoid injecting terminal escape sequences into the prompt.
+        set -l tmp (__fish_strip_control_characters (__fish_unexpand_tilde $path))
 
         if test "$fish_prompt_pwd_dir_length" -eq 0
             echo $tmp
@@ -45,7 +45,7 @@ function prompt_pwd --description 'Print the current working directory, shortene
                 continue
             end
 
-            string join / (string replace -ar '(\.?[^/]{'"$fish_prompt_pwd_dir_length"'})[^/]*/' '$1/' $tmp) $full
+            string join / -- (string replace -ar -- '(\.?[^/]{'"$fish_prompt_pwd_dir_length"'})[^/]*/' '$1/' $tmp) $full
         end
     end
 end

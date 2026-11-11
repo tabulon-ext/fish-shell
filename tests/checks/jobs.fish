@@ -1,22 +1,5 @@
 #RUN: %fish %s
 
-# Ensure there's no zombies before we start, otherwise the tests will mysteriously fail.
-set -l zombies_among_us
-if not contains (uname) SunOS
-    set zombies_among_us (ps -o stat | string match 'Z*' | count)
-else
-    # Solaris' ps is awkward, I don't know if this actually works
-    set zombies_among_us (ps -o s | string match 'Z*' | count)
-end
-
-[ "$zombies_among_us" -eq "0" ]
-or begin
-	echo "Found existing zombie processes. Clean up zombies before running this test."
-	exit 1
-end
-echo "All clear of zombies."
-# CHECK: All clear of zombies.
-
 # Verify zombies are not left by disown (#7183, #5342)
 # Do this first to avoid colliding with the other disowned processes below, which may
 # still be running at the end of the script
@@ -28,12 +11,17 @@ sleep 0.1
 #CHECK: Trigger process reaping
 # The initial approach here was to kill the PID of the sleep process, which should
 # be gone by the time we get here. Unfortunately, kill from procps on pre-2016 distributions
-# does not print an error for non-existent PIDs, so instead look for zombies in this session
-# (there should be none).
-if not contains (uname) SunOS
-    ps -o stat | string match 'Z*'
-else
-    ps -o s | string match 'Z*'
+# does not print an error for non-existent PIDs, so instead look for zombies in this session.
+# There could already be zombies from previous tests run in this session or a test could be run
+# simultaneously that causes a zombie to spawn, so limit the output only to processes started by
+# this fish instance.
+# Cygwin does not have zombies (or at least, `ps` cannot show if they are or not)
+if not __fish_is_cygwin
+    if not contains (uname) SunOS
+        ps -o ppid,stat
+    else
+        ps -o ppid,s
+    end | string match -e $fish_pid | string match '*Z*'
 end
 
 # Verify disown can be used with last_pid, even if it is separate from the pgroup.
@@ -73,16 +61,16 @@ echo $status
 jobs foo
 echo $status
 #CHECK: 2
-#CHECKERR: jobs: 'foo' is not a valid process id
+#CHECKERR: jobs: 'foo' is not a valid process ID
 jobs -q 1
 echo $status
 #CHECK: 1
 jobs -q foo
 echo $status
 #CHECK: 2
-#CHECKERR: jobs: 'foo' is not a valid process id
+#CHECKERR: jobs: 'foo' is not a valid process ID
 disown foo
-#CHECKERR: disown: 'foo' is not a valid job specifier
+#CHECKERR: disown: 'foo' is not a valid process ID
 disown (jobs -p)
 or exit 0
 
@@ -98,7 +86,7 @@ foo
 sleep 1 &
 set sleep_job $last_pid
 function sleep_done_$sleep_job --on-job-exit $sleep_job
-    /bin/echo "sleep is done"
+    command echo "sleep is done"
     functions --erase sleep_done_$sleep_job
 end
 sleep 2
@@ -138,3 +126,16 @@ emit bar
 command true &
 set -l truepid $last_pid
 test $truepid != $fish_pid || echo true has same pid as fish
+
+# Job exit events work even after the job has exited!
+sleep .5
+function thud --on-job-exit $truepid
+    echo "thud called"
+end
+# CHECK: thud called
+
+disown 252
+# CHECKERR: disown: Could not find job '252'
+
+jobs %abc
+# CHECKERR: jobs: '%abc' is not a valid job ID

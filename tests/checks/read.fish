@@ -1,14 +1,12 @@
-# RUN: %fish -C "set fish %fish" %s
-# Set term again explicitly to ensure behavior.
-set -gx TERM xterm
+# RUN: fish=%fish %fish %s
 # Read with no vars is not an error
 read
 
 # Read with -a and anything other than exactly on var name is an error
 read -a
-#CHECKERR: read: Expected 1 args, got 0
+#CHECKERR: read: expected 1 arguments; got 0
 read --array v1 v2
-#CHECKERR: read: Expected 1 args, got 2
+#CHECKERR: read: expected 1 arguments; got 2
 read --list v1
 
 # Verify correct behavior of subcommands and splitting of input.
@@ -144,6 +142,15 @@ echo $bar
 echo test | read -n 1 foo
 echo $foo
 #CHECK: t
+echo test | read -n 2147483647 foo
+echo $foo
+#CHECK: test
+echo test | read -n 2147483648 foo
+#CHECKERR: read: Argument '2147483648' is out of range
+#CHECKERR: {{.*}}/checks/read.fish (line {{\d+}}):
+#CHECKERR: {{^}}echo test | read -n 2147483648 foo
+#CHECKERR: {{^}}^
+#CHECKERR: (Type 'help read' for related documentation)
 
 # read -z tests
 echo -n testing | read -lz foo
@@ -155,7 +162,7 @@ echo $foo
 echo newline | read -lz foo
 echo $foo
 #CHECK: newline
-#CHECK: 
+#CHECK:
 echo -n 'test ing' | read -lz foo bar
 print_vars foo bar
 #CHECK: 1 'test' 1 'ing'
@@ -192,7 +199,7 @@ set line abcdefghijklmnopqrstuvwxyz
 # Ensure the `read` command terminates if asked to read too much data. The var
 # should be empty. We throw away any data we read if it exceeds the limit on
 # what we consider reasonable.
-yes $line | dd bs=1024 count=(math "1 + $fish_read_limit / 1024") 2>/dev/null | read --null x
+yes $line | head -c (math "1 + $fish_read_limit") | read --null x
 if test $status -ne 122
     echo reading too much data did not terminate with failure status
 end
@@ -239,15 +246,15 @@ end
 
 # Same as previous test but limit the amount of data fed to `read` rather than
 # using the `--nchars` flag.
-yes $line | dd bs=1024 count=(math "$fish_read_limit / 1024") 2>/dev/null | read --null x
+yes $line | head -c $fish_read_limit | read --null x
 if test $status -ne 0
     echo the read of the max amount of data failed unexpectedly
 end
 if test (string length "$x") -ne $fish_read_limit
-    echo reading the max amount of data with --nchars failed the length test: (string length "$x") / $fish_read_limit
+    echo reading with a limited amount of input data failed the length test
 end
 
-# Confirm reading non-interactively works -- \#4206 regression
+# Confirm reading non-interactively works -- #4206 regression
 echo abc\ndef | $fish -i -c 'read a; read b; set --show a; set --show b'
 #CHECK: $a: set in global scope, unexported, with 1 elements
 #CHECK: $a[1]: |abc|
@@ -303,7 +310,7 @@ echo $foo
 echo $bar
 #CHECK: b
 echo $baz
-#CHECK: 
+#CHECK:
 
 # Multi-char delimiters with -d
 echo a...b...c | read -l -d "..." a b c
@@ -345,3 +352,176 @@ echo c $c
 # CHECK: a 'afoo barb'
 # CHECK: b
 # CHECK: c
+
+function function-scoped-read
+    echo foo | read --function skamtebord
+    set -S skamtebord
+    begin
+        echo bar | read skamtebord
+        echo baz | read -f craaab
+    end
+    set -S skamtebord
+    set -S craaab
+end
+
+function-scoped-read
+# CHECK: $skamtebord: set in local scope, unexported, with 1 elements
+# CHECK: $skamtebord[1]: |foo|
+# CHECK: $skamtebord: set in local scope, unexported, with 1 elements
+# CHECK: $skamtebord[1]: |bar|
+# CHECK: $craaab: set in local scope, unexported, with 1 elements
+# CHECK: $craaab[1]: |baz|
+
+echo foo\nbar\nbaz | begin
+    read -l foo
+    read -l bar
+    cat
+    # CHECK: baz
+    echo $bar
+    # CHECK: bar
+end
+
+begin
+    echo 1
+    echo 2
+end | read -l --line foo bar
+echo $foo $bar
+# CHECK: 1 2
+
+echo foo | read status
+# CHECKERR: read: status: cannot overwrite read-only variable
+# CHECKERR: {{.*}}read.fish (line {{\d+}}):
+# CHECKERR: {{^}}echo foo | read status
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help read' for related documentation)
+echo read $status
+# CHECK: read 2
+
+echo ' foo' | read -n 1 -la var
+set -S var
+#CHECK: $var: set in local scope, unexported, with 0 elements
+
+echo foo | read -n -1
+# CHECKERR: read: -1: invalid integer
+# CHECKERR: {{.*}}read.fish (line {{\d+}}):
+# CHECKERR: {{^}}echo foo | read -n -1
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help read' for related documentation)
+
+echo '1 ( (' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |( (|
+
+echo '1 ) )' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |)|
+
+echo '1 { {' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |{ {|
+
+echo '1 } }' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |}|
+
+# Raw tokens into named variables
+echo 'echo "&" a\ b &
+second line (dropped)' | read -l --tokenize-raw head tail
+set -S head tail
+# CHECK: $head: set in local scope, unexported, with 1 elements
+# CHECK: $head[1]: |echo|
+# CHECK: $tail: set in local scope, unexported, with 1 elements
+# CHECK: $tail[1]: |"&" a\\ b &|
+
+# Raw tokens into list
+echo 'echo "&" & a\ b
+second line (dropped)' | read -l --tokenize-raw -a rawlist
+set -S rawlist
+# CHECK: $rawlist: set in local scope, unexported, with 4 elements
+# CHECK: $rawlist[1]: |echo|
+# CHECK: $rawlist[2]: |"&"|
+# CHECK: $rawlist[3]: |&|
+# CHECK: $rawlist[4]: |a\\ b|
+
+echo 'echo "&" & a\ b
+second line' | read -l --tokenize-raw -a rawlist_null -z
+set -S rawlist_null
+# CHECK: $rawlist_null: set in local scope, unexported, with 8 elements
+# CHECK: $rawlist_null[1]: |echo|
+# CHECK: $rawlist_null[2]: |"&"|
+# CHECK: $rawlist_null[3]: |&|
+# CHECK: $rawlist_null[4]: |a\\ b|
+# CHECK: $rawlist_null[5]: |\n|
+# CHECK: $rawlist_null[6]: |second|
+# CHECK: $rawlist_null[7]: |line|
+# CHECK: $rawlist_null[8]: |\n|
+
+echo 'foo "&" bar' | read -al --tokenize --tokenize tokens
+set -S tokens
+# CHECK: $tokens: set in local scope, unexported, with 3 elements
+# CHECK: $tokens[1]: |foo|
+# CHECK: $tokens[2]: |&|
+# CHECK: $tokens[3]: |bar|
+echo 'foo "&" bar' | read -al --tokenize-raw --tokenize-raw tokens
+set -S tokens
+# CHECK: $tokens: set in local scope, unexported, with 3 elements
+# CHECK: $tokens[1]: |foo|
+# CHECK: $tokens[2]: |"&"|
+# CHECK: $tokens[3]: |bar|
+echo 'foo "&" bar' | read -al --tokenize --tokenize-raw tokens
+# CHECKERR: read: invalid option combination, --tokenize and --tokenize-raw are mutually exclusive
+# CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
+# CHECKERR: {{^}}echo 'foo "&" bar' | read -al --tokenize --tokenize-raw tokens
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help read' for related documentation)
+
+echo '1  {} "{}"' | read -lat var
+echo $var
+# CHECK: 1 {} {}
+
+printf \xf9\x98\xb1\x83\x8b | read -z out_of_range_codepoint
+set -S out_of_range_codepoint
+# CHECK: $out_of_range_codepoint: set in global scope, unexported, with 1 elements
+# CHECK: $out_of_range_codepoint[1]: |\Xf9\X98\Xb1\X83\X8b|
+
+printf \xff | { read invalid_utf8; set -S invalid_utf8 }
+# CHECK: $invalid_utf8: set in global scope, unexported, with 1 elements
+# CHECK: $invalid_utf8[1]: |\Xff|
+
+echo foo | read -l -p "echo little-p" -P big-P var
+# CHECKERR: read: Options -p and -P cannot be used together
+# CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
+# CHECKERR: {{^}}echo foo | read -l -p "echo little-p" -P big-P var
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help read' for related documentation)
+
+echo foo | read -d ";" -L var
+# CHECKERR: read: Options --delimiter and --line cannot be used together
+echo foo | read --null -L var
+# CHECKERR: read: Options -z and --line cannot be used together
+echo foo | read -d "&" --tokenize
+# CHECKERR: read: --delimiter --tokenize: options cannot be used together
+echo foo | read -L --tokenize-raw
+# CHECKERR: read: --line --tokenize-raw: options cannot be used together
+
+echo foo | read -lxu var
+# CHECKERR: read: cannot both export and unexport
+# CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
+# CHECKERR: {{^}}echo foo | read -lxu var
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help read' for related documentation)
+
+echo foo | read -lf var
+# CHECKERR: read: scope can be only one of: universal function global local
+# CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
+# CHECKERR: {{^}}echo foo | read -lf var
+# CHECKERR: {{^}}^
+# CHECKERR: (Type 'help read' for related documentation)

@@ -14,7 +14,7 @@
 {%- macro searchbox() %}
 {# modified from sphinx/themes/basic/searchbox.html #}
     {%- if builder != "htmlhelp" %}
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="{{ pathto('search') }}" method="get">
           <input placeholder="{{ _('Quick search') }}" type="text" name="q" />
           <input type="submit" value="{{ _('Go') }}" />
@@ -22,7 +22,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     {%- endif %}
 {%- endmacro %}
 
@@ -35,6 +34,11 @@
         {{ searchbox() }}
     </li>
     {%- endif %}
+    {# This is hidden by default, unhidden by our global shared script. #}
+    <div id="old-docs-notice" style="display: none">
+        This documents an old version of fish.
+        <a href="{{ pathto('../current/', 1) }}">See the latest release.</a>
+    </div>
 {% endblock %}
 
 {# The sidebar goes into the *document* block, so it ends up in the document *div* so it doesn't go over the footer #}
@@ -60,6 +64,8 @@
 </div>
 
 <script type="text/javascript">
+ FISH_DOCS_VERSION = "{{ version }}";
+
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.
      var pre = it.target;

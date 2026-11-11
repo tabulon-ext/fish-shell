@@ -52,12 +52,12 @@ echo $test[2 9..]
 # missing start, cannot use implied range
 echo $test[1..2..]
 #CHECKERR: {{.*}}: Invalid index value
-#CHECKERR: echo $test[1..2..]
-#CHECKERR:                ^
+#CHECKERR: {{^}}echo $test[1..2..]
+#CHECKERR: {{^}}               ^
 echo $test[..1..2]
 #CHECKERR: {{.*}}: Invalid index value
-#CHECKERR: echo $test[..1..2]
-#CHECKERR:               ^
+#CHECKERR: {{^}}echo $test[..1..2]
+#CHECKERR: {{^}}              ^
 
 set -l empty
 echo $test[ $empty..]
@@ -78,3 +78,36 @@ echo $list # CHECK: 2 1 3
 set -l list 1 2 3
 set list[2..] $list[-1..2]
 echo $list # CHECK: 1 3 2
+
+# nested slices
+set -l foo (seq 2 200)
+echo $foo[$foo[$foo[$foo[1 5]]]]
+#CHECK: 5 9
+echo $foo[1 (echo $foo[2 3]) 4]
+#CHECK: 2 4 5 5
+echo $foo[1(echo $foo[2 3])4]
+#CHECK: 2 4 5 5
+echo $foo[1 $foo[2 3] 4]
+#CHECK: 2 4 5 2 5 5
+echo $foo[1$foo[2 3]4]
+#CHECK: 2 35 2 45
+
+# escaped slice operator
+set foo abc def ghi
+echo $foo\1331\135
+#CHECK: abc[1] def[1] ghi[1]
+echo $foo[1]
+#CHECK: abc
+set foo\1331\135 bar
+echo $foo\1331\135
+#CHECK: bar[1] def[1] ghi[1]
+echo $foo[1]
+#CHECK: bar
+
+# embded `]`
+set foo abc def
+set bar "1]2"
+echo $foo[$bar]
+#CHECKERR: {{.*}}/slices.fish (line {{\d+}}): Invalid index value
+#CHECKERR: {{^}}echo $foo[$bar]
+#CHECKERR: {{^}}            ^

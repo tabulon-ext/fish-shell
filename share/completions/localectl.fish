@@ -6,10 +6,10 @@ for cmd in $commands
     complete -c localectl -n "not __fish_seen_subcommand_from $commands" -a $cmd
 end
 set -l localevars LANG LC_MESSAGES LC_{CTYPE,NUMERIC,TIME,COLLATE,MONETARY,MESSAGES,PAPER,NAME,ADDRESS,TELEPHONE,MEASUREMENT,IDENTIFICATION,ALL}
-set -l locales $localevars=(localectl list-locales)
+set -l locales $localevars=(localectl list-locales 2>/dev/null)
 
 function __fish_localectl_layout
-    set -l cmd (commandline -poc)
+    set -l cmd (commandline -pxc)
     set -e cmd[1]
     set -e cmd[1]
     for l in (localectl list-x11-keymap-layouts)

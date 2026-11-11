@@ -50,10 +50,6 @@ set -l sharpness_opts '
     7\tleast sharp
 '
 
-function __fish_cwebp_pass_opts
-    seq 0 10 | awk '{printf "%s\t\n", $0}' -
-end
-
 set -l alpha_method_opts '
     0\t
     1\tdefault
@@ -74,7 +70,7 @@ set -l metadata_opts '
 '
 
 function __fish_cwebp_is_first_arg_or_its_value -a arg -d 'Like __fish_is_first_arg, but also returns true for the second token after a given parameter'
-    set -l tokens (commandline -co)
+    set -l tokens (commandline -cx)
 
     switch (count $tokens)
         case 1
@@ -110,8 +106,8 @@ complete -c cwebp -x -o sharpness -a "$sharpness_opts" -d 'Filter sharpness'
 complete -c cwebp -o strong -d 'Use strong filter'
 complete -c cwebp -o simple -d 'Use simple filter'
 complete -c cwebp -o sharp_yuv -d 'Use sharper (and slower) RGB->YUV conversion'
-complete -c cwebp -x -o partition_limit -d 'Limit quality to fit the 512k limit on the first partition (integer 0:no degradation…100:full degradation)'
-complete -c cwebp -x -o pass -a '(__fish_cwebp_pass_opts)' -d 'Analysis pass number'
+complete -c cwebp -x -o partition_limit -d 'Limit quality to fit 512k limit on first partition (0:no degradation…100:full degradation)'
+complete -c cwebp -x -o pass -a '(seq 0 10)' -d 'Analysis pass number'
 complete -c cwebp -x -o crop -d 'Crop picture with <x> <y> <v> <h> rectangle'
 complete -c cwebp -x -o resize -d 'Resize picture to <w> <h> after any cropping'
 complete -c cwebp -o mt -d 'Use multi-threading if available'

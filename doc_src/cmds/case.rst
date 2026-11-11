@@ -1,14 +1,15 @@
-.. _cmd-case:
-
 case - conditionally execute a block of commands
 ================================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    switch VALUE; [case [WILDCARD...]; [COMMANDS...]; ...] end
+    switch VALUE
+       [case [GLOB ...]
+           [COMMAND ...]]
+    end
 
 Description
 -----------

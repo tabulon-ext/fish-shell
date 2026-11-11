@@ -1,3 +1,4 @@
+# localization: tier1
 function alias --description 'Creates a function wrapping a command'
     set -l options h/help s/save
     argparse -n alias --max-args=2 $options -- $argv
@@ -10,14 +11,13 @@ function alias --description 'Creates a function wrapping a command'
 
     set -l name
     set -l body
-    set -l prefix
 
     if not set -q argv[1]
         # Print the known aliases.
         for func in (functions -n)
             set -l output (functions $func | string match -r -- "^function .* --description (?:'alias (.*)'|alias\\\\ (.*))\$")
             if set -q output[2]
-                set output (string replace -r -- '^'$func'[= ]' '' $output[2])
+                set output (string replace -r -- '^'(string escape --style=regex -- $func)'[= ]' '' $output[2])
                 echo alias $func (string escape -- $output[1])
             end
         end
@@ -35,10 +35,10 @@ function alias --description 'Creates a function wrapping a command'
 
     # sanity check
     if test -z "$name"
-        printf ( _ "%s: Name cannot be empty\n") alias >&2
+        printf ( _ "%s: name cannot be empty\n") alias >&2
         return 1
     else if test -z "$body"
-        printf ( _ "%s: Body cannot be empty\n") alias >&2
+        printf ( _ "%s: body cannot be empty\n") alias >&2
         return 1
     end
 
@@ -51,9 +51,9 @@ function alias --description 'Creates a function wrapping a command'
     # $body starts with the same command as $name.
     if test $first_word = $name
         if contains $name (builtin --names)
-            set prefix builtin
+            set body "builtin $body"
         else
-            set prefix command
+            set body "command $body"
         end
     end
     set -l cmd_string (string escape -- "alias $argv")
@@ -67,7 +67,8 @@ function alias --description 'Creates a function wrapping a command'
         set wraps --wraps (string escape -- $body)
     end
 
-    echo "function $name $wraps --description $cmd_string; $prefix $body \$argv; end" | source
+    # The function definition in split in two lines to ensure that a '#' can be put in the body.
+    echo "function $name $wraps --description $cmd_string"\n"    $body \$argv"\n"end" | source
     if set -q _flag_save
         funcsave $name
     end

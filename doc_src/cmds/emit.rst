@@ -1,20 +1,19 @@
-.. _cmd-emit:
-
 emit - emit a generic event
 ===========================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    emit EVENT_NAME [ARGUMENTS...]
+    emit EVENT_NAME [ARGUMENTS ...]
 
 Description
 -----------
 
 ``emit`` emits, or fires, an event. Events are delivered to, or caught by, special functions called :ref:`event handlers <event>`. The arguments are passed to the event handlers as function arguments.
 
+The **--help** or **-h** option displays help about using this command.
 
 Example
 -------
@@ -28,7 +27,7 @@ The following code first defines an event handler for the generic event named 't
     function event_test --on-event test_event
         echo event test: $argv
     end
-    
+
     emit test_event something
 
 

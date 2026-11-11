@@ -1,3 +1,4 @@
+# localization: skip(private)
 function __fish_cursor_xterm -d 'Set cursor (xterm)'
     set -l shape $argv[1]
 
@@ -8,6 +9,9 @@ function __fish_cursor_xterm -d 'Set cursor (xterm)'
             set shape 4
         case line
             set shape 6
+        case '*'
+            # Unknown shape
+            return
     end
     if contains blink $argv
         set shape (math $shape - 1)

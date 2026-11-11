@@ -1,25 +1,26 @@
 image: alpine/edge
 packages:
+  - cargo
   - cmake
   - ninja
-  - ncurses-dev
   - pcre2-dev
+  - py3-pexpect
   - python3
-  - py-pip
+  - rust
+  - tmux
 sources:
-  - https://git.sr.ht/~faho/fish
+  - https://github.com/fish-shell/fish-shell
 tasks:
   - build: |
-          pip3 install pexpect
-          cd fish
-          mkdir build || :
+          cd fish-shell
+          mkdir build
           cd build
           cmake -G Ninja .. \
-          -DCMAKE_INSTALL_PREFIX=/usr \
-          -DCMAKE_INSTALL_DATADIR=share \
-          -DCMAKE_INSTALL_DOCDIR=share/doc/fish \
-          -DCMAKE_INSTALL_SYSCONFDIR=/etc
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_INSTALL_DATADIR=share \
+            -DCMAKE_INSTALL_DOCDIR=share/doc/fish \
+            -DCMAKE_INSTALL_SYSCONFDIR=/etc
           ninja
   - test: |
-          cd fish/build
-          env SHOW_INTERACTIVE_LOG=1 ninja test
+          cd fish-shell/build
+          ninja fish_run_tests

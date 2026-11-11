@@ -5,11 +5,6 @@ __fish_complete_ssh ssh
 # ssh specific completions
 #
 
-# Also retrieve `user@host` entries from history
-function __ssh_history_completions
-    history --prefix ssh --max=100 | string replace -rf '.* ([A-Za-z0-9._:-]+@[A-Za-z0-9._:-]+).*' '$1'
-end
-
 complete -c ssh -d Remote -xa "(__fish_complete_user_at_hosts)"
 complete -c ssh -d Remote -k -fa '(__ssh_history_completions)'
 
@@ -18,6 +13,7 @@ complete -c ssh -n 'test (__fish_number_of_cmd_args_wo_opts) -ge 2' -d "Command 
 complete -c ssh -s a -d "Disables forwarding of the authentication agent"
 complete -c ssh -s B -d "Bind to the address of that interface" -xa '(__fish_print_interfaces)'
 complete -c ssh -s b -d "Local address to bind to" -xa '(__fish_print_addresses)'
+complete -c ssh -s D -d "Specify dynamic port forwarding" -x
 complete -c ssh -s E -d "Append debug logs to log_file" -rF
 complete -c ssh -s e -d "Escape character" -xa "\^ none"
 complete -c ssh -s f -d "Go to background"
@@ -29,7 +25,7 @@ complete -c ssh -s k -d "Disables forwarding of GSSAPI credentials"
 complete -c ssh -s L -d "Specify local port forwarding" -x
 complete -c ssh -s l -x -a "(__fish_complete_users)" -d User
 complete -c ssh -s M -d "Places the ssh client into master mode"
-complete -c ssh -s m -d "MAC algorithm" -xa "(__fish_complete_list , __fish_ssh_macs)"
+complete -c ssh -s m -d "MAC algorithm" -xa "(__fish_stripprefix='^-\w*m' __fish_complete_list , __fish_ssh_macs)"
 complete -c ssh -s N -d "Do not execute remote command"
 complete -c ssh -s n -d "Prevent reading from stdin"
 complete -c ssh -s O -d "Control an active connection multiplexing master process" -x

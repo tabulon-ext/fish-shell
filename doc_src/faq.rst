@@ -4,16 +4,16 @@ Frequently asked questions
 What is the equivalent to this thing from bash (or other shells)?
 -----------------------------------------------------------------
 
-See :ref:`Fish for bash users <fish_for_bash_users>`
+See :doc:`fish for bash users <fish_for_bash_users>`
 
 How do I set or clear an environment variable?
 ----------------------------------------------
-Use the :ref:`set <cmd-set>` command::
+Use the :doc:`set <cmds/set>` command::
 
     set -x key value # typically set -gx key value
     set -e key
 
-Since fish 3.1 you can set an environment variable for just one command using the ``key=value some command`` syntax, like in other shells.  The two lines below behave identically - unlike other shells, fish will output ``value`` both times::
+Since fish 3.1 you can set an environment variable for one command using the ``key=value some command`` syntax, like in other shells.  The two lines below behave identically - unlike other shells, fish will output ``value`` both times::
 
     key=value echo $key
     begin; set -lx key value; echo $key; end
@@ -29,7 +29,7 @@ Use ``set -q var``.  For example, ``if set -q var; echo variable defined; end``.
         echo either variable defined
     end
 
-Keep in mind that a defined variabled could also be empty, either by having no elements (if set like ``set var``) or only empty elements (if set like ``set var ""``). Read on for how to deal with those.
+Keep in mind that a defined variable could also be empty, either by having no elements (if set like ``set var``) or only empty elements (if set like ``set var ""``). Read on for how to deal with those.
 
 
 How do I check whether a variable is not empty?
@@ -73,6 +73,14 @@ How do I run a command every login? What's fish's equivalent to .bashrc or .prof
 ------------------------------------------------------------------------------------
 Edit the file ``~/.config/fish/config.fish`` [#]_, creating it if it does not exist (Note the leading period).
 
+Unlike .bashrc and .profile, this file is always read, even in non-interactive or login shells.
+
+To do something only in interactive shells, check ``status is-interactive`` like::
+
+  if status is-interactive
+      # use the coolbeans theme
+      fish_config theme choose coolbeans
+  end
 
 .. [#] The "~/.config" part of this can be set via $XDG_CONFIG_HOME, that's just the default.
 
@@ -83,14 +91,23 @@ The prompt is the output of the ``fish_prompt`` function. Put it in ``~/.config/
     function fish_prompt
         set_color $fish_color_cwd
         echo -n (prompt_pwd)
-        set_color normal
+        set_color --reset
         echo -n ' > '
     end
 
 
-You can also use the Web configuration tool, :ref:`fish_config <cmd-fish_config>`, to preview and choose from a gallery of sample prompts.
+You can also use the Web configuration tool, :doc:`fish_config <cmds/fish_config>`, to preview and choose from a gallery of sample prompts.
 
-If you want to modify your existing prompt, you can use :ref:`funced <cmd-funced>` and :ref:`funcsave <cmd-funcsave>` like::
+Or you can use fish_config from the commandline::
+
+  > fish_config prompt show
+  # displays all the prompts fish ships with
+  > fish_config prompt choose disco
+  # loads the disco prompt in the current shell
+  > fish_config prompt save
+  # makes the change permanent
+
+If you want to modify your existing prompt, you can use :doc:`funced <cmds/funced>` and :doc:`funcsave <cmds/funcsave>` like::
 
   >_ funced fish_prompt
   # This opens up your editor (set in $EDITOR).
@@ -99,24 +116,31 @@ If you want to modify your existing prompt, you can use :ref:`funced <cmd-funced
   # Once you are happy with it:
   >_ funcsave fish_prompt
 
-This also applies to :ref:`fish_right_prompt <cmd-fish_right_prompt>` and :ref:`fish_mode_prompt <cmd-fish_mode_prompt>`.
+This also applies to :doc:`fish_right_prompt <cmds/fish_right_prompt>` and :doc:`fish_mode_prompt <cmds/fish_mode_prompt>`.
 
 Why does my prompt show a ``[I]``?
 ----------------------------------
 
-That's the :ref:`fish_mode_prompt <cmd-fish_mode_prompt>`. It is displayed by default when you've activated vi mode using ``fish_vi_key_bindings``.
+That's the :doc:`fish_mode_prompt <cmds/fish_mode_prompt>`. It is displayed by default when you've activated vi mode using ``fish_vi_key_bindings``.
 
-If you haven't activated vi mode on purpose, you might have installed a third-party theme that does it.
+If you haven't activated vi mode on purpose, you might have installed a third-party theme or plugin that does it.
 
-If you want to change or disable this display, modify the ``fish_mode_prompt`` function, for instance via :ref:`funced <cmd-funced>`.
+If you want to change or disable this display, modify the ``fish_mode_prompt`` function, for instance via :doc:`funced <cmds/funced>`.
 
 How do I customize my syntax highlighting colors?
 -------------------------------------------------
-Use the web configuration tool, :ref:`fish_config <cmd-fish_config>`, or alter the :ref:`fish_color family of environment variables <variables-color>`.
+Use the web configuration tool started by :doc:`fish_config <cmds/fish_config>`,
+or alter the :ref:`fish_color family of environment variables <variables-color>`,
+or use the :doc:`fish_config theme <cmds/fish_config>` subcommand, like::
+
+  > fish_config theme show
+  # to demonstrate all the colorschemes
+  > fish_config theme choose coolbeans
+  # to load the "coolbeans" theme
 
 How do I change the greeting message?
 -------------------------------------
-Change the value of the variable ``fish_greeting`` or create a ``fish_greeting`` function. For example, to remove the greeting use::
+Change the value of the variable ``fish_greeting`` or create a :doc:`fish_greeting <cmds/fish_greeting>` function. For example, to remove the greeting use::
 
     set -U fish_greeting
 
@@ -124,48 +148,36 @@ Or if you prefer not to use a universal variable, use::
 
     set -g fish_greeting
 
-in config.fish.
-
-I'm seeing weird output before each prompt when using screen. What's wrong?
----------------------------------------------------------------------------
-Quick answer:
-
-Run the following command in fish::
-
-    function fish_title; end; funcsave fish_title
-
-
-Problem solved!
-
-The long answer:
-
-Fish is trying to set the titlebar message of your terminal. While screen itself supports this feature, your terminal does not. Unfortunately, when the underlying terminal doesn't support setting the titlebar, screen simply passes through the escape codes and text to the underlying terminal instead of ignoring them. It is impossible to detect and resolve this problem from inside fish since fish has no way of knowing what the underlying terminal type is. For now, the only way to fix this is to unset the titlebar message, as suggested above.
-
-Note that fish has a default titlebar message, which will be used if the fish_title function is undefined. So simply unsetting the fish_title function will not work.
+in :ref:`config.fish <configuration>`.
 
 How do I run a command from history?
 ------------------------------------
-Type some part of the command, and then hit the :kbd:`↑` (up) or :kbd:`↓` (down) arrow keys to navigate through history matches. Additional default key bindings include :kbd:`Control`\ +\ :kbd:`P` (up) and :kbd:`Control`\ +\ :kbd:`N` (down). See :ref:`Searchable command history <history-search>` for more information.
+Type some part of the command, and then hit the :kbd:`up` (``↑``) or :kbd:`down` (``↓``) arrow keys to navigate through history matches, or press :kbd:`ctrl-r` to open the history in a searchable pager. In this pager you can press :kbd:`ctrl-r` or :kbd:`ctrl-s` to move to older or younger history respectively.
+
+Additional default key bindings include :kbd:`ctrl-p` (up) and :kbd:`ctrl-n` (down). See :ref:`Searchable command history <history-search>` for more information.
 
 Why doesn't history substitution ("!$" etc.) work?
 --------------------------------------------------
 Because history substitution is an awkward interface that was invented before interactive line editing was even possible. Instead of adding this pseudo-syntax, fish opts for nice history searching and recall features.  Switching requires a small change of habits: if you want to modify an old line/word, first recall it, then edit.
 
-As a special case, most of the time history substitution is used as ``sudo !!``. In that case just press :kbd:`Alt`\ +\ :kbd:`S`, and it will recall your last commandline with ``sudo`` prefixed (or toggle a ``sudo`` prefix on the current commandline if there is anything).
+As a special case, most of the time history substitution is used as ``sudo !!``. In that case press :kbd:`alt-s`, and it will recall your last commandline with ``sudo`` prefixed (or toggle a ``sudo`` prefix on the current commandline if there is anything).
 
 In general, fish's history recall works like this:
 
-- Like other shells, the Up arrow, :kbd:`↑` recalls whole lines, starting from the last executed line.  A single press replaces "!!", later presses replace "!-3" and the like.
+- Like other shells, the Up arrow, ``up`` recalls whole lines, starting from the last executed line. So instead of typing ``!!``, you would hit the up-arrow.
 
-- If the line you want is far back in the history, type any part of the line and then press Up one or more times.  This will filter the recalled lines to ones that include this text, and you will get to the line you want much faster.  This replaces "!vi", "!?bar.c" and the like.
+- If the line you want is far back in the history, type any part of the line and then press Up one or more times.  This will filter the recalled lines to ones that include this text, and you will get to the line you want much faster.  This replaces "!vi", "!?bar.c" and the like. If you want to see more context, you can press ``ctrl-r`` to open the history in the pager.
 
-- :kbd:`Alt`\ +\ :kbd:`↑` recalls individual arguments, starting from the last argument in the last executed line.  A single press replaces "!$", later presses replace "!!:4" and such. As an alternate key binding, :kbd:`Alt`\ +\ :kbd:`.` can be used.
-
-- If the argument you want is far back in history (e.g. 2 lines back - that's a lot of words!), type any part of it and then press :kbd:`Alt`\ +\ :kbd:`↑`.  This will show only arguments containing that part and you will get what you want much faster.  Try it out, this is very convenient!
-
-- If you want to reuse several arguments from the same line ("!!:3*" and the like), consider recalling the whole line and removing what you don't need (:kbd:`Alt`\ +\ :kbd:`D` and :kbd:`Alt`\ +\ :kbd:`Backspace` are your friends).
+- ``alt-up`` recalls individual arguments, starting from the last argument in the last executed line. This can be used instead of "!$".
 
 See :ref:`documentation <editor>` for more details about line editing in fish.
+
+That being said, you can use :ref:`abbreviations` to implement history substitution. Here's ``!!`` only::
+
+  function last_history_item; echo $history[1]; end
+  abbr -a !! --position anywhere --function last_history_item
+
+Run this and ``!!`` will be replaced with the last history entry, anywhere on the commandline. Put it into :ref:`config.fish <configuration>` to keep it.
 
 How do I run a subcommand? The backtick doesn't work!
 -----------------------------------------------------
@@ -175,6 +187,7 @@ How do I run a subcommand? The backtick doesn't work!
         echo $i
     end
 
+It also supports the familiar ``$()`` syntax, even in quotes. Backticks are not supported because they are discouraged even in POSIX shells. They nest poorly and are hard to tell from single quotes (``''``).
 
 My command (pkg-config) gives its output as a single long string?
 -----------------------------------------------------------------
@@ -184,19 +197,18 @@ That means if you run
 
 ::
 
-    echo x(printf '%s ' a b c)x
+    count (printf '%s ' a b c)
 
 
-It will print ``xa b c x``, because the "a b c " is used in one piece. But if you do
+It will print ``1``, because the "a b c " is used in one piece. But if you do
 
 ::
 
-    echo x(printf '%s\n' a b c)x
+    count (printf '%s\n' a b c)
 
+it will print ``3``, because it gave ``count`` the arguments "a", "b" and "c" separately.
 
-it will print ``xax xbx xcx``.
-
-In the overwhelming majority of cases, splitting on spaces is unwanted, so this is an improvement.
+In the overwhelming majority of cases, splitting on spaces is unwanted, so this is an improvement. This is why you hear about problems with filenames with spaces, after all.
 
 However sometimes, especially with ``pkg-config`` and related tools, splitting on spaces is needed.
 
@@ -208,7 +220,7 @@ The ``-n`` is so empty elements are removed like POSIX shells would do.
 
 How do I get the exit status of a command?
 ------------------------------------------
-Use the ``$status`` variable. This replaces the ``$?`` variable used in some other shells.
+Use the ``$status`` variable. This replaces the ``$?`` variable used in other shells.
 
 ::
 
@@ -218,7 +230,7 @@ Use the ``$status`` variable. This replaces the ``$?`` variable used in some oth
     end
 
 
-If you are just interested in success or failure, you can run the command directly as the if-condition::
+If you are only interested in success or failure, you can run the command directly as the if-condition::
 
     if somecommand
         echo "Command succeeded"
@@ -232,7 +244,7 @@ Or if you just want to do one command in case the first succeeded or failed, use
     somecommand
     or someothercommand
 
-See the documentation for :ref:`test <cmd-test>` and :ref:`if <cmd-if>` for more information.
+See the :ref:`Conditions <syntax-conditional>` and the documentation for :doc:`test <cmds/test>` and :doc:`if <cmds/if>` for more information.
 
 My command prints "No matches for wildcard" but works in bash
 -------------------------------------------------------------
@@ -247,7 +259,7 @@ If the wildcard doesn't match any files, fish prints an error instead of running
 
   > echo *this*does*not*exist
   fish: No matches for wildcard '*this*does*not*exist'. See `help expand`.
-  echo *this*does*not*exist 2>| xsel --clipboard
+  echo *this*does*not*exist
        ^
 
 Now, bash also tries to match files in this case, but when it doesn't find a match, it passes along the literal wildcard string instead.
@@ -283,22 +295,6 @@ For these reasons, fish does not do this, and instead expects asterisks to be qu
 
 This is similar to bash's "failglob" option.
 
-I accidentally entered a directory path and fish changed directory. What happened?
-----------------------------------------------------------------------------------
-If fish is unable to locate a command with a given name, and it starts with ``.``, ``/`` or ``~``, fish will test if a directory of that name exists. If it does, it is implicitly assumed that you want to change working directory. For example, the fastest way to switch to your home directory is to simply press ``~`` and enter.
-
-How can I use ``-`` as a shortcut for ``cd -``?
------------------------------------------------
-In fish versions prior to 2.5.0 it was possible to create a function named ``-`` that would do ``cd -``. Changes in the 2.5.0 release included several bug fixes that enforce the rule that a bare hyphen is not a valid function (or variable) name. However, you can achieve the same effect via an abbreviation::
-
-    abbr -a -- - 'cd -'
-
-The open command doesn't work.
-------------------------------
-The ``open`` command uses the MIME type database and the ``.desktop`` files used by Gnome and KDE to identify filetypes and default actions. If at least one of these environments is installed, but the open command is not working, this probably means that the relevant files are installed in a non-standard location. Consider :ref:`asking for more help <more-help>`.
-
-.. _faq-ssh-interactive:
-
 Why won't SSH/SCP/rsync connect properly when fish is my login shell?
 ---------------------------------------------------------------------
 
@@ -330,33 +326,23 @@ This is more important to fish than other shells because features like syntax hi
 
 Sometimes, there is disagreement on the width. There are numerous causes and fixes for this:
 
-- It is possible the character is simply too new for your system to know - in this case you need to refrain from using it.
-- Fish or your terminal might not know about the character or handle it wrong - in this case fish or your terminal needs to be fixed, or you need to update to a fixed version.
+- It is possible the character is too new for your system to know - in this case you need to refrain from using it.
+- fish or your terminal might not know about the character or handle it wrong - in this case fish or your terminal needs to be fixed, or you need to update to a fixed version.
 - The character has an "ambiguous" width and fish thinks that means a width of X while your terminal thinks it's Y. In this case you either need to change your terminal's configuration or set $fish_ambiguous_width to the correct value.
-- The character is an emoji and the host system only supports Unicode 8, while you are running the terminal on a system that uses Unicode >= 9. In this case set $fish_emoji_width to 2.
+- The character is an emoji and your system only supports Unicode 8. In this case set $fish_emoji_width to 1.
 
 This also means that a few things are unsupportable:
 
 - Non-monospace fonts - there is *no way* for fish to figure out what width a specific character has as it has no influence on the terminal's font rendering.
 - Different widths for multiple ambiguous width characters - there is no way for fish to know which width you assign to each character.
 
-How do I make fish my default shell?
-------------------------------------
-If you installed fish manually (e.g. by compiling it, not by using a package manager), you first need to add fish to the list of shells by executing the following command (assuming you installed fish in /usr/local)::
+.. _faq-terminal-compatibility:
 
-    echo /usr/local/bin/fish | sudo tee -a /etc/shells
+fish does not work in a specific terminal
+-----------------------------------------
 
-
-If you installed a prepackaged version of fish, the package manager should have already done this for you.
-
-In order to change your default shell, type::
-
-    chsh -s /usr/local/bin/fish
-
-
-You may need to adjust the above path to e.g. ``/usr/bin/fish``. Use the command ``which fish`` if you are unsure of where fish is installed.
-
-Unfortunately, there is no way to make the changes take effect at once. You will need to log out and back in again.
+The terminal might not meet all of :doc:`fish's requirements <terminal-compatibility>`.
+Please report this to your terminal's and to fish's issue tracker.
 
 .. _faq-uninstalling:
 
@@ -364,20 +350,9 @@ Uninstalling fish
 -----------------
 If you want to uninstall fish, first make sure fish is not set as your shell. Run ``chsh -s /bin/bash`` if you are not sure.
 
-If you installed it with a package manager, just use that package manager's uninstall function. If you built fish yourself, assuming you installed it to /usr/local, do this::
+If you installed it with a package manager, use that package manager's uninstall function. If you built fish yourself, assuming you installed it to /usr/local, do this::
 
     rm -Rf /usr/local/etc/fish /usr/local/share/fish ~/.config/fish
     rm /usr/local/share/man/man1/fish*.1
     cd /usr/local/bin
     rm -f fish fish_indent
-
-Where can I find extra tools for fish?
---------------------------------------
-The fish user community extends fish in unique and useful ways via scripts that aren't always appropriate for bundling with the fish package. Typically because they solve a niche problem unlikely to appeal to a broad audience. You can find those extensions, including prompts, themes and useful functions, in various third-party repositories. These include:
-
-- `Fisher <https://github.com/jorgebucaran/fisher>`_
-- `Fundle <https://github.com/tuvistavie/fundle>`_
-- `Oh My Fish <https://github.com/oh-my-fish/oh-my-fish>`_
-- `Tacklebox <https://github.com/justinmayer/tacklebox>`_
-
-This is not an exhaustive list and the fish project has no opinion regarding the merits of the repositories listed above or the scripts found therein.

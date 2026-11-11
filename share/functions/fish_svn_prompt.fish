@@ -64,7 +64,6 @@ set -g __fish_svn_prompt_char_token_stolen_color --bold purple
 set -g __fish_svn_prompt_char_token_broken_display B
 set -g __fish_svn_prompt_char_token_broken_color --bold magenta
 
-
 # ==============================
 
 function __fish_svn_prompt_parse_status --description "helper function that does pretty formatting on svn status"
@@ -83,11 +82,10 @@ function __fish_svn_prompt_parse_status --description "helper function that does
             set -l flag_var_display __fish_svn_prompt_char_{$flag_type}_display
             set -l flag_var_color __fish_svn_prompt_char_{$flag_type}_color
             # set the colour and print display character, then restore to default display colour
-            printf '%s%s%s' (set_color $$flag_var_color) $$flag_var_display (set_color normal)
+            printf '%s%s%s' (set_color $$flag_var_color) $$flag_var_display (set_color --reset)
         end
     end
 end
-
 
 function fish_svn_prompt --description "Prompt function for svn"
     # if svn isn't installed or doesn't offer svnversion then don't do anything
@@ -100,7 +98,7 @@ function fish_svn_prompt --description "Prompt function for svn"
     or return
 
     # get the current revision number
-    printf '(%s%s%s' (set_color $__fish_svn_prompt_color_revision) (__fish_print_svn_rev) (set_color normal)
+    printf '(%s%s%s' (set_color $__fish_svn_prompt_color_revision) (__fish_print_svn_rev) (set_color --reset)
 
     # resolve the status of the checkout
     # 1. perform `svn status`
@@ -121,7 +119,7 @@ function fish_svn_prompt --description "Prompt function for svn"
         set -l column_status (printf '%s\n' $svn_status_lines | cut -c $col | sort -u | tr -d ' ')
 
         # check that the column status list does not only contain an empty element (if it does, this column is empty)
-        if [ (count $column_status) -gt 1 -o -n "$column_status[1]" ]
+        if test (count $column_status) -gt 1 -o -n "$column_status[1]"
 
             # parse the status flags for this column and create the formatting by calling out to the helper function
             set -l svn_status_flags (__fish_svn_prompt_parse_status $column_status)

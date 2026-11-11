@@ -1,3 +1,4 @@
+# localization: tier1
 # Provide a menu of the directories recently navigated to and ask the user to
 # choose one to make the new current working directory (cwd).
 
@@ -34,9 +35,9 @@ function cdh --description "Menu based cd command"
     set -l dirc (count $uniq_dirs)
     if test $dirc -gt (count $letters)
         set -l msg (_ 'This should not happen. Have you changed the cd function?')
-        printf "$msg\n"
+        printf "$msg\n" >&2
         set -l msg (_ 'There are %s unique dirs in your history but I can only handle %s')
-        printf "$msg\n" $dirc (count $letters)
+        printf "$msg\n" $dirc (count $letters) >&2
         return 1
     end
 
@@ -45,10 +46,10 @@ function cdh --description "Menu based cd command"
     # we count down rather than up.
     for i in (seq $dirc -1 1)
         set -l dir $uniq_dirs[$i]
-        set -l label_color normal
+        set -l label_color --reset
         set -q fish_color_cwd
         and set label_color $fish_color_cwd
-        set -l dir_color_reset (set_color normal)
+        set -l dir_color_reset (set_color --reset)
         set -l dir_color
         if test "$dir" = "$PWD"
             set dir_color (set_color $fish_color_history_current)
@@ -58,13 +59,13 @@ function cdh --description "Menu based cd command"
         if set -q home_dir[2]
             set dir "~$home_dir[2]"
         end
-        printf '%s %s %2d) %s %s%s%s\n' (set_color $label_color) $letters[$i] $i (set_color normal) $dir_color $dir $dir_color_reset
+        printf '%s %s %2d) %s %s%s%s\n' (set_color $label_color) $letters[$i] $i (set_color --reset) $dir_color $dir $dir_color_reset
     end
 
     # Ask the user which directory from their history they want to cd to.
     set -l msg (_ 'Select directory by letter or number: ')
     read -l -p "echo '$msg'" choice
-    if test "$choice" = ""
+    if test -z "$choice"
         return 0
     else if string match -q -r '^[a-z]$' $choice
         # Convert the letter to an index number.
@@ -77,11 +78,11 @@ function cdh --description "Menu based cd command"
             cd $uniq_dirs[$choice]
             return
         else
-            printf "$msg\n" $dirc $choice
+            printf "$msg\n" $dirc $choice >&2
             return 1
         end
     else
-        printf "$msg\n" $dirc $choice
+        printf "$msg\n" $dirc $choice >&2
         return 1
     end
 end

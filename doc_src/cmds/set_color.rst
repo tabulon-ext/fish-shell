@@ -1,50 +1,103 @@
-.. _cmd-set_color:
-
 set_color - set the terminal color
 ==================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    set_color [OPTIONS] VALUE
+    set_color [OPTIONS] [VALUE]
 
 Description
 -----------
 
-``set_color`` is used to control the color and styling of text in the terminal. ``VALUE`` describes that styling. It's a reserved color name like *red* or a RGB color value given as 3 or 6 hexadecimal digits ("F27" or "FF2277"). A special keyword *normal* resets text formatting to terminal defaults.
+``set_color`` controls the color and styling of text in the terminal.
+It writes non-printing color and text style escape sequences to standard output.
+
+*VALUE* describes the styling.
+*VALUE* can be a reserved color name like **red** or an RGB color value given as 3 or 6 hexadecimal digits ("F27" or "FF2277").
+A special keyword **normal** resets text formatting to terminal defaults, however it is not recommended and the **--reset** option is preferred as it is less confusing and more future-proof.
 
 Valid colors include:
 
-  - *black*, *red*, *green*, *yellow*, *blue*, *magenta*, *cyan*, *white*
-  - *brblack*, *brred*, *brgreen*, *bryellow*, *brblue*, *brmagenta*, *brcyan*, *brwhite*
+  - **black**, **red**, **green**, **yellow**, **blue**, **magenta**, **cyan**, **white**
+  - **brblack**, **brred**, **brgreen**, **bryellow**, **brblue**, **brmagenta**, **brcyan**, **brwhite**
 
-The *br*- (as in 'bright') forms are full-brightness variants of the 8 standard-brightness colors on many terminals. *brblack* has higher brightness than *black* - towards gray.
+The *br*- (as in 'bright') forms are full-brightness variants of the 8 standard-brightness colors on many terminals. **brblack** has higher brightness than **black** - towards gray.
 
-An RGB value with three or six hex digits, such as A0FF33 or f2f can be used. ``fish`` will choose the closest supported color. A three digit value is equivalent to specifying each digit twice; e.g., ``set_color 2BC`` is the same as ``set_color 22BBCC``. Hexadecimal RGB values can be in lower or uppercase. Depending on the capabilities of your terminal (and the level of support ``set_color`` has for it) the actual color may be approximated by a nearby matching reserved color name or ``set_color`` may not have an effect on color.
+An RGB value with three or six hex digits, such as A0FF33 or f2f can be used.
+A three digit value is equivalent to specifying each digit twice; e.g., ``set_color 2BC`` is the same as ``set_color 22BBCC``.
+Hexadecimal RGB values can be in lower or uppercase.
 
-A second color may be given as a desired fallback color. e.g. ``set_color 124212 brblue`` will instruct set_color to use *brblue* if a terminal is not capable of the exact shade of grey desired. This is very useful when an 8 or 16 color terminal might otherwise not use a color.
+If :envvar:`fish_term24bit` is set to 0, fish will translate RGB values to the nearest color on the 256-color palette.
+If :envvar:`fish_term256` is also set to 0, fish will translate them to the 16-color palette instead.
+fish launched as ``fish -d term_support`` will include diagnostic messages that indicate the color support mode in use.
+
+If multiple colors are specified, fish prefers the first RGB one.
+However if :envvar:`fish_term256` is set to 0, fish prefers the first named color specified.
 
 The following options are available:
 
-- ``-b``, ``--background`` *COLOR* sets the background color.
-- ``-c``, ``--print-colors`` prints a list of the 16 named colors.
-- ``-o``, ``--bold`` sets bold mode.
-- ``-d``, ``--dim`` sets dim mode.
-- ``-i``, ``--italics`` sets italics mode.
-- ``-r``, ``--reverse`` sets reverse mode.
-- ``-u``, ``--underline`` sets underlined mode.
+**-f** or **--foreground** *COLOR*
+    Sets the foreground color.
+    This is equivalent to calling ``set_color COLOR`` with the exception that the keyword **normal** will only reset the foreground color to its default, instead of all colors and modes.
+    It cannot be used with *VALUE* or **--print-colors**.
 
-Using the *normal* keyword will reset foreground, background, and all formatting back to default.
+**-b** or **--background** *COLOR*
+    Sets the background color.
+
+**--underline-color** *COLOR*
+    Set the underline color.
+
+**-c** or **--print-colors**
+    Prints the given colors or a colored list of the 16 named colors.
+    It cannot be used with **--foreground**.
+
+**-o** or **--bold**
+    Sets bold mode.
+
+**-d** or **--dim**
+    Sets dim mode.
+
+**-i** or **--italics**, or **-iSTATE** or **--italics=STATE**
+    Sets italics mode. The state can be **on** (default), or **off**.
+
+**-r** or **--reverse**, or **-rSTATE** or **--reverse=STATE**
+    Sets reverse mode. The state can be **on** (default), or **off**.
+
+**-s** or **--strikethrough**, or **-sSTATE** or **--strikethrough=STATE**
+    Sets strikethrough mode. The state can be **on** (default), or **off**.
+
+**-u** or **--underline**, or **-uSTYLE** or **--underline=STYLE**
+    Set the underline mode; supported styles are **single** (default), **double**, **curly**, **dotted**, **dashed** and **off**.
+
+**--reset**
+    Reset the text formatting to the terminal defaults before applying the new colors and modes.
+    This is equivalent to calling ``set_color normal`` except that it is possible to set the foreground color in the same call (e.g. ``set_color --reset green``)
+
+**--theme=THEME**
+    Ignored.
+    :ref:`Color variables <variables-color>` that contain only this option are treated like missing / empty color variables,
+    i.e. fish will use the fallback color instead.
+    :doc:`fish_config theme choose <fish_config>` erases all :ref:`color variable <fish_config-color-variables>`
+    whose value includes this option, and adds this option to all color variables it sets.
+    This allows identifying variables set by a theme,
+    and it allows fish to update color variables whenever :envvar:`fish_terminal_color_theme` changes.
+
+**-h** or **--help**
+    Displays help about using this command.
 
 Notes
 -----
 
-1. Using the *normal* keyword will reset both background and foreground colors to whatever is the default for the terminal.
-2. Setting the background color only affects subsequently written characters. Fish provides no way to set the background color for the entire terminal window. Configuring the window background color (and other attributes such as its opacity) has to be done using whatever mechanisms the terminal provides. Look for a config option.
-3. Some terminals use the ``--bold`` escape sequence to switch to a brighter color set rather than increasing the weight of text.
-4. ``set_color`` works by printing sequences of characters to *stdout*. If used in command substitution or a pipe, these characters will also be captured. This may or may not be desirable. Checking the exit status of ``isatty stdout`` before using ``set_color`` can be useful to decide not to colorize output in a script.
+1. Using ``set_color normal`` will reset all colors and modes to the terminal's default.
+2. In contrast, ``set_color --foreground normal`` will only reset the foreground color and leave all the other colors and modes unchanged.
+3. Because of the risk of confusion, ``set_color --reset`` is recommended over ``set_color normal``.
+4. Setting the background color only affects subsequently written characters. fish provides no way to set the background color for the entire terminal window. Configuring the window background color (and other attributes such as its opacity) has to be done using whatever mechanisms the terminal provides. Look for a config option.
+5. Some terminals use the ``--bold`` escape sequence to switch to a brighter color set rather than increasing the weight of text.
+6. If you use ``set_color`` in a command substitution or a pipe, these characters will also be captured.
+   This may or may not be desirable.
+   Checking the exit status of ``isatty stdout`` before using ``set_color`` can be useful to decide not to colorize output in a script.
 
 Examples
 --------
@@ -56,24 +109,3 @@ Examples
     set_color blue; echo "Violets are blue"
     set_color 62A; echo "Eggplants are dark purple"
     set_color normal; echo "Normal is nice" # Resets the background too
-
-
-Terminal Capability Detection
------------------------------
-
-Fish uses some heuristics to determine what colors a terminal supports to avoid sending sequences that it won't understand.
-
-In particular it will:
-
-- Enable 256 colors if $TERM contains "xterm", except for known exceptions (like MacOS 10.6 Terminal.app)
-- Enable 24-bit ("true-color") even if the $TERM entry only reports 256 colors. This includes modern xterm, VTE-based terminals like Gnome Terminal, Konsole and iTerm2.
-- Detect support for italics, dim, reverse and other modes.
-
-If terminfo reports 256 color support for a terminal, 256 color support will always be enabled.
-
-To force true-color support on or off, set $fish_term24bit to "1" for on and 0 for off - ``set -g fish_term24bit 1``.
-
-To debug color palette problems, ``tput colors`` may be useful to see the number of colors in terminfo for a terminal. Fish launched as ``fish -d2`` will include diagnostic messages that indicate the color support mode in use.
-
-The ``set_color`` command uses the terminfo database to look up how to change terminal colors on whatever terminal is in use. Some systems have old and incomplete terminfo databases, and lack color information for terminals that support it. Fish assumes that all terminals can use the [ANSI X3.64](https://en.wikipedia.org/wiki/ANSI_escape_code) escape sequences if the terminfo definition indicates a color below 16 is not supported.
-

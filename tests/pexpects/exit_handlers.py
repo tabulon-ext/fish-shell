@@ -3,7 +3,6 @@ from pexpect_helper import SpawnedProc
 import os
 import signal
 import tempfile
-from time import sleep
 
 # Ensure that on-exit handlers run even if we get SIGHUP.
 with tempfile.NamedTemporaryFile(mode="r", encoding="utf8") as tf:
@@ -11,7 +10,7 @@ with tempfile.NamedTemporaryFile(mode="r", encoding="utf8") as tf:
     fish_pid = sp.spawn.pid
     sp.expect_prompt()
     sp.sendline(
-        "function myexit --on-event fish_exit; /bin/echo $fish_pid > {filename}; end".format(
+        "function myexit --on-event fish_exit; command echo $fish_pid > {filename}; end".format(
             filename=tf.name
         )
     )

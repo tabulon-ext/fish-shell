@@ -32,3 +32,24 @@ begin
 end
 echo $k
 # CHECK: global
+
+function foo --on-variable foo
+    echo foo set
+end
+
+for foo in 1 2 3
+    true
+end
+# CHECK: foo set
+# CHECK: foo set
+# CHECK: foo set
+
+for x in 1 2 3
+    test $x -eq 2 && set -l foo bar
+    echo foo value is $foo
+end
+# We keep the old value from outside the loop
+# CHECK: foo value is 3
+# CHECK: foo set
+# CHECK: foo value is bar
+# CHECK: foo value is 3

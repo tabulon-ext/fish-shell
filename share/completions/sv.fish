@@ -2,7 +2,6 @@
 # A part of the runit init system
 # Author: Leonardo da Rosa Eugênio <lelgenio@disroot.org>
 
-
 set -l commands \
     status up down once s u d o pause cont hup \
     alarm interrupt quit 1 2 term kill exit p c h \
@@ -10,24 +9,24 @@ set -l commands \
     shutdown force-stop force-reload force-restart force-shutdown \
     try-restart check
 
-
 function __fish_complete_sv_list_services
-    for dir in $SVDIR /run/runit/service/ /etc/runit/current /etc/runit/runsvdir/
-        test -d $dir
-        and break
-    end
-    set -l services (string match -r '[^/]*$' $dir/*)
-    set -l out (sv status $services 2>/dev/null)
-    and string replace -r "^(\w+: )(.*?):" '$2\t$1$2:' $out
+    set -l svdir (path filter -d -- $SVDIR  \
+        /run/runit/runsvdir/current \
+        /run/runit/service \
+        /etc/services \
+        /services)
+    set -q svdir[1]; or return
+    set -l services (path basename -- $svdir[1]/*)
+    set -l sv_status (sv status $services 2>/dev/null |
+        string replace -ar ';.*$' '')
+    and string replace -r "^(\w+: )(.*?):" '$2\t$1' $sv_status
     or printf "%s\n" $services
 end
 
 complete -f -c sv -a "(__fish_complete_sv_list_services)" -n "__fish_seen_subcommand_from $commands"
 
-
 complete -fc sv -s v -d "Report status for up, down, term, once, cont, and exit"
 complete -fc sv -s w -d "Override the default timeout to report status"
-
 
 set -l no_comm "not __fish_seen_subcommand_from $commands"
 

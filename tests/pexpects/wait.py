@@ -21,9 +21,7 @@ sendline("jobs")
 expect_prompt("jobs: There are no jobs")
 
 # three job ids specified
-sendline("sleep 0.5 &; sleep 0.1 &; sleep 0.3 &; sleep 0.7 &;")
-expect_prompt()
-sendline("wait %1 %3 %4")
+sendline("sleep 0.5 &; sleep 0.1 &; sleep 0.3 &; sleep 0.7 &; wait %1 %3 %4")
 expect_str("Job 2, 'sleep 0.1 &' has ended")
 expect_str("Job 3, 'sleep 0.3 &' has ended")
 expect_str("Job 1, 'sleep 0.5 &' has ended")
@@ -32,9 +30,7 @@ sendline("jobs")
 expect_prompt("jobs: There are no jobs")
 
 # specify job ids with -n option
-sendline("sleep 0.5 &; sleep 0.1 &; sleep 0.3 &")
-expect_prompt()
-sendline("wait -n %1 %3")
+sendline("sleep 0.5 &; sleep 0.1 &; sleep 0.3 &; wait -n %1 %3")
 expect_str("Job 2, 'sleep 0.1 &' has ended")
 expect_prompt("Job 3, 'sleep 0.3 &' has ended")
 sendline("wait -n %1")
@@ -113,8 +109,25 @@ expect_prompt()
 
 # test error messages
 sendline("wait 0")
-expect_prompt("wait: '0' is not a valid process id")
+expect_prompt("wait: '0' is not a valid process ID")
 sendline("wait 1")
-expect_prompt("wait: Could not find a job with process id '1'")
+expect_prompt("wait: Could not find a job with process ID '1'")
 sendline("wait hoge")
 expect_prompt("wait: Could not find child processes with the name 'hoge'")
+
+# See that we don't wait if job expansion fails
+sendline("sleep 5m &")
+expect_prompt()
+sendline("wait %5")
+expect_prompt("jobs: No suitable job: %5")
+sendline("kill %1")
+expect_prompt()
+
+# Regression test for #12301
+sendline("function sleep_func; sleep 2s; end")
+expect_prompt()
+sendline("cat | cat | sleep_func > /dev/null")
+sleep(0.2)
+send("\x1a")
+sleep(0.2)
+expect_prompt()

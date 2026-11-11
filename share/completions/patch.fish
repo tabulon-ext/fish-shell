@@ -3,6 +3,10 @@
 # TODO: POSIX patch
 #
 
+# No effect on POSIX systems that don't use O_BINARY/O_TEXT
+uname -s | string match -q CYGWIN\*
+and complete -c patch -l binary -d "Read & write data in binary mode"
+
 complete -c patch -s b -l backup -d "Back up the original contents of each file"
 complete -c patch -l backup-if-mismatch -d "Back up files if patch doesn't match exactly"
 complete -c patch -l no-backup-if-mismatch -d "Don't back up for mismatching patches"
@@ -17,7 +21,7 @@ complete -c patch -s f -l force -d "Like -t, but ignore bad-Prereq patches, assu
 complete -c patch -s F -l fuzz -x -d "Number of LINES for inexact 'fuzzy' matching" -a "(seq 0 9){\tfuzz lines}"
 complete -c patch -s g -l get -x -d "Get files from RCS etc. if positive; ask if negative" -a '(seq -1 1){\t\n}'
 complete -c patch -l help -f -d "Display help"
-complete -c patch -s i -l input -x -d "Read patch from FILE instead of stdin" -k -a "( __fish_complete_suffix .patch; __fish_complete_suffix .diff)"
+complete -c patch -s i -l input -x -d "Read patch from FILE instead of stdin" -k -a "( __fish_complete_suffix .patch .diff)"
 complete -c patch -s l -l ignore-whitespace -d "Ignore whitespace changes between patch & input"
 complete -c patch -s n -l normal -d "Interpret patch as normal diff"
 complete -c patch -s N -l forward -d "Ignore patches that seem reversed or already applied"
@@ -38,7 +42,3 @@ complete -c patch -s x -l debug -x -d "Set internal debugging flags"
 complete -c patch -s Y -l basename-prefix -x -d "Prepend PREFIX to backup file basenames"
 complete -c patch -s z -l suffix -x -d "Append SUFFIX to backup file name"
 complete -c patch -s Z -l set-utc -d "Set times of patched files assuming diff uses UTC"
-
-# No effect on POSIX systems that don't use O_BINARY/O_TEXT
-uname -s | string match -q CYGWIN\*
-and complete -c patch -l binary -d "Read & write data in binary mode"

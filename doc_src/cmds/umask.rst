@@ -1,18 +1,21 @@
-.. _cmd-umask:
-
 umask - set or get the file creation mode mask
 ==============================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
     umask [OPTIONS] [MASK]
 
 
 Description
 -----------
+
+.. only:: builder_man
+
+          NOTE: This page documents the fish builtin ``umask``.
+          To see the documentation on any non-fish versions, use ``command man umask``.
 
 ``umask`` displays and manipulates the "umask", or file creation mode mask, which is used to restrict the default access to files.
 
@@ -22,11 +25,14 @@ Access rights are explained in the manual page for the ``chmod(1)`` program.
 
 With no parameters, the current file creation mode mask is printed as an octal number.
 
-- ``-h`` or ``--help`` prints this message.
+**-S** or **--symbolic**
+    Prints the umask in symbolic form instead of octal form.
 
-- ``-S`` or ``--symbolic`` prints the umask in symbolic form instead of octal form.
+**-p** or **--as-command**
+    Outputs the umask in a form that may be reused as input.
 
-- ``-p`` or ``--as-command`` outputs the umask in a form that may be reused as input
+**-h** or **--help**
+    Displays help about using this command.
 
 If a numeric mask is specified as a parameter, the current shell's umask will be set to that value, and the rights specified by that mask will be removed from new files and directories by default.
 

@@ -6,15 +6,9 @@ function __fish_gradle_contains_build_file
 end
 
 function __fish_gradle_create_completion_cache_file
-    set -l xdg_cache_home $XDG_CACHE_HOME
-    # Set up cache directory
-    if test -z "$xdg_cache_home"
-        set xdg_cache_home $HOME/.cache
-    end
-    mkdir -m 700 -p "$xdg_cache_home/gradle-completions"
-
+    set -l cache_dir (__fish_make_cache_dir gradle-completions)
     set -l md5Hash (__fish_md5 -s $argv[1] | string replace -r '.* = ' '')
-    string trim -- "$xdg_cache_home/gradle-completions/$md5Hash"
+    string trim -- "$cache_dir/$md5Hash"
 end
 
 ##############################
@@ -54,7 +48,7 @@ function __fish_gradle_get_task_completion
 
     set -l gradle_cache_file (__fish_gradle_create_completion_cache_file "{$PWD}-tasks")
     if not test -f "$gradle_cache_file" -a -s "$gradle_cache_file"
-        command gradle -q tasks --all 2>/dev/null | string match --regex '^[a-z][A-z:]+.*' | string replace ' - ' \t >"$gradle_cache_file"
+        command gradle -q tasks --all 2>/dev/null | string match --regex '^(?!-)[A-Za-z0-9:-]+(?: - .*)?$' | string replace ' - ' \t >"$gradle_cache_file"
     end
 
     # return possible tasks
@@ -65,7 +59,6 @@ complete --command gw --command gradle --command gradlew \
     --condition __fish_gradle_contains_build_file \
     --exclusive \
     --arguments "(__fish_gradle_get_task_completion)"
-
 
 ###############################
 # Configure Option Completion #

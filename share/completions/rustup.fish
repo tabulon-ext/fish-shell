@@ -1,5 +1,3 @@
-complete -c rustup
-
 set -l subcmds \
     show \
     update \
@@ -24,14 +22,26 @@ set -l rustup_show \
     help
 
 # rustup does not really expose a mechanism of retrieving a list of all valid components without the archs appended
+# Just print the list of installable x86_64-unknown-linux-gnu components for everyone
 function __rustup_components
-    rustup component list | string match -r "^\S+" | string replace -f -- -x86_64-unknown-linux-gnu ""
+    rustup component list | string match -r "\S+" | string replace -rf -- "-x86_64-unknown-linux-gnu.*" "" | sort -u
 end
 
-# function __rustup_installable_components
-# 	set -l not_installed (comm -2 -3 (printf "%s\n" $__rustup_components | psub -F) (rustup component list --installed | psub -F) 2>/dev/null)
-# 	__rustup_strip_common_suffix_strict $not_installed
-# end
+function __rustup_installed_components
+    # If the user has supplied `--toolchain foo`, use it to filter the list
+    set -l toolchain (commandline -j | string replace -rf ".*\s--toolchain\s+(\S+)\s.*" '$1')
+    set -l toolchain_filter
+    if string match -qr . -- $toolchain
+        set toolchain_filter "--toolchain $toolchain"
+    end
+
+    rustup component list --installed $toolchain_filter | string replace -r -- (printf -- "-%s\n" (__rustup_targets) | string join "|") "" | sort -u
+
+end
+
+function __rustup_installable_components
+    comm -2 -3 (__rustup_components | psub -F) (__rustup_installed_components | psub -F)
+end
 
 # All *valid* target triples, retrieved from source
 function __rustup_triples
@@ -135,7 +145,6 @@ function __rustup_triples
         x86_64-unknown-fuchsia \
         x86_64-unknown-haiku \
         x86_64-unknown-linux-gnu \
-        x86_64-unknown-linux-gnu \
         x86_64-unknown-linux-gnux32 \
         x86_64-unknown-linux-musl \
         x86_64-unknown-netbsd \
@@ -201,28 +210,33 @@ end
 
 # All valid toolchains excluding installed
 function __rustup_installable_toolchains
-    comm -2 -3 (__rustup_all_toolchains | psub -F) (printf "%s\n" $__rustup_toolchains | psub -F) \
+    comm -2 -3 (__rustup_all_toolchains | psub -F) (printf "%s\n" (__rustup_toolchains) | psub -F) \
         # Ignore warnings about lists not being in sorted order, as we are aware of their contents
         2>/dev/null
 end
 
-function __rustup_installed_components
-    # If the user has supplied `--toolchain foo`, use it to filter the list
-    set -l toolchain (commandline -j | string replace -rf ".*\s--toolchain\s+(\S+)\s.*" '$1')
-    set -l toolchain_filter
-    if string match -qr . -- $toolchain
-        set toolchain_filter "--toolchain $toolchain"
-    end
+function __rustup_targets
+    rustup target list | string replace -rf "^(\S+).*" '$1'
+end
 
-    set -l installed (rustup component list --installed $toolchain_filter)
-    __rustup_strip_common_suffix_strict $installed
+function __rustup_installed_targets
+    rustup target list | string replace -rf "^(\S+) \(installed\)" '$1'
+end
+
+# All valid targets excluding installed
+function __rustup_installable_targets
+    rustup target list | string match -rv '\(installed\)$'
 end
 
 # Trim trailing attributes, e.g. "rust-whatever (default)" -> "rust-whatever"
-set -l __rustup_toolchains (rustup toolchain list | string replace -r "\s+.*" '')
+function __rustup_toolchains
+    rustup toolchain list | string replace -r "\s+.*" ''
+end
 # By default, the long name of a toolchain is used (e.g. nightly-x86_64-unknown-linux-gnu),
 # but a shorter version can be used if it is unambiguous.
-set -l __rustup_toolchains_short (__rustup_strip_common_suffix_strict $__rustup_toolchains)
+function __rustup_toolchains_short
+    __rustup_strip_common_suffix_strict (__rustup_toolchains)
+end
 
 set -l rustup_profiles minimal default complete
 
@@ -230,26 +244,31 @@ complete -c rustup -n __fish_should_complete_switches -s v -l verbose
 complete -c rustup -n __fish_should_complete_switches -s h -l help
 complete -c rustup -n __fish_should_complete_switches -s V -l version
 
-complete -c rustup -n "fish_is_nth_token 1" -xa "$subcmds"
+complete -c rustup -n "__fish_is_nth_token 1" -xa "$subcmds"
 
-complete -c rustup -n "__fish_prev_arg_in default" -xa "$__rustup_toolchains_short $__rustup_toolchains"
+complete -c rustup -n "__fish_prev_arg_in default" -xa "(__rustup_toolchains_short) (__rustup_toolchains)"
 complete -c rustup -n "__fish_prev_arg_in toolchain" -xa "add install list remove uninstall link help"
 complete -c rustup -n "__fish_prev_arg_in target" -xa "list add install remove uninstall help"
 complete -c rustup -n "__fish_prev_arg_in component" -xa "list add install remove uninstall help"
 complete -c rustup -n "__fish_prev_arg_in override" -xa "list set unset help"
-complete -c rustup -n "__fish_prev_arg_in run" -xa "$__rustup_toolchains_short $__rustup_toolchains"
+complete -c rustup -n "__fish_prev_arg_in run" -xa "(__rustup_toolchains_short) (__rustup_toolchains)"
 complete -c rustup -n "__fish_prev_arg_in self" -xa "update remove uninstall upgrade-data help"
 complete -c rustup -n "__fish_prev_arg_in set" -xa "default-host profile help"
 
 complete -c rustup -n "__fish_seen_subcommand_from toolchain; and __fish_prev_arg_in remove uninstall" \
-    -xa "$__rustup_toolchains $__rustup_toolchains_short"
+    -xa "(__rustup_toolchains) (__rustup_toolchains_short)"
 complete -c rustup -n "__fish_seen_subcommand_from toolchain; and __fish_prev_arg_in add install" \
     -xa "(__rustup_installable_toolchains)"
 
 complete -c rustup -n "__fish_seen_subcommand_from component; and __fish_prev_arg_in remove uninstall" \
     -xa "(__rustup_installed_components)"
 complete -c rustup -n "__fish_seen_subcommand_from component; and __fish_prev_arg_in add install" \
-    -xa "(__rustup_components)"
+    -xa "(__rustup_installable_components)"
+
+complete -c rustup -n "__fish_seen_subcommand_from target; and __fish_prev_arg_in add install" \
+    -xa "(__rustup_installable_targets)"
+complete -c rustup -n "__fish_seen_subcommand_from target; and __fish_prev_arg_in remove uninstall" \
+    -xa "(__rustup_installed_targets)"
 
 complete -c rustup -n "__fish_seen_subcommand_from show;" -xa "$rustup_show"
 
@@ -260,7 +279,7 @@ complete -c rustup -n "__fish_seen_subcommand_from set; and __fish_prev_arg_in p
     -xa "$rustup_profiles"
 
 # Global argument completions where valid
-complete -c rustup -n "__fish_prev_arg_in --toolchain" -xa "$__rustup_toolchains_short $__rustup_toolchains"
+complete -c rustup -n "__fish_prev_arg_in --toolchain" -xa "(__rustup_toolchains_short) (__rustup_toolchains)"
 
 complete -f -c rustup -n '__fish_seen_subcommand_from doc' -a '(__fish_rustup_docs_primitives)'
 complete -f -c rustup -n '__fish_seen_subcommand_from doc' -a '(__fish_rustup_docs_keywords)'

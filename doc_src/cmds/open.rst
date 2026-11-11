@@ -1,14 +1,12 @@
-.. _cmd-open:
-
 open - open file in its default application
 ===========================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    open FILES...
+    open FILES ...
 
 
 Description

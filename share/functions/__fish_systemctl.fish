@@ -1,4 +1,8 @@
+# localization: skip(private)
 function __fish_systemctl --description 'Call systemctl with some options from the current commandline'
+    # We don't want to complete with ANSI color codes
+    set -lu SYSTEMD_COLORS
+
     # These options are all global - before or after subcommand/arguments.
     # There's a bunch of long-only options in here, so we need to be creative with the mandatory short version.
     set -l opts t/type= s-state= p/property= a/all
@@ -13,7 +17,7 @@ function __fish_systemctl --description 'Call systemctl with some options from t
     set opts $opts 1-no-pager 2-no-legend h/help 3-version
 
     set -l args $argv
-    set -l cmdline (commandline -opc) (commandline -ct)
+    set -l cmdline (commandline -xpc) (commandline -ct)
     set -e cmdline[1]
     argparse $opts -- $cmdline 2>/dev/null
     or return
@@ -30,7 +34,7 @@ function __fish_systemctl --description 'Call systemctl with some options from t
         # These are the normal commands, so just complete all units.
         # For "restart" et al, also complete non-running ones, since it can be used regardless of state.
         case reenable status reload {try-,}{reload-or-,}restart is-{active,enabled,failed} show cat \
-            help reset-failed list-dependencies list-units revert add-{wants,requires} edit
+            help reset-failed list-dependencies list-units revert add-{wants,requires} edit clean thaw
         case enable
             # This will only work for "list-unit-files", but won't print an error for "list-units".
             set -q _flag_state; or set _flag_state disabled
@@ -38,12 +42,12 @@ function __fish_systemctl --description 'Call systemctl with some options from t
             set -q _flag_state; or set _flag_state enabled
         case start
             # Running `start` on an already started unit isn't an _error_, but useless.
-            set -q _flag_state; or set _flag_state dead,failed
+            set -q _flag_state; or set _flag_state dead,failed,disabled
         case mask
             set -q _flag_state; or set _flag_state loaded
         case unmask
             set -q _flag_state; or set _flag_state masked
-        case stop kill
+        case stop kill freeze
             # TODO: Is "kill" useful on other unit types?
             # Running as the catch-all, "mounted" for .mount units, "active" for .target.
             set -q _flag_state; or set _flag_state running,mounted,active

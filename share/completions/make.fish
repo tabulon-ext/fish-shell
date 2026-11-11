@@ -12,13 +12,19 @@ function __fish_print_make_targets --argument-names directory file
     if make --version 2>/dev/null | string match -q 'GNU*'
         # https://stackoverflow.com/a/26339924
         make $makeflags -pRrq : 2>/dev/null |
-            awk -F: '/^# Files/,/^# Finished Make data base/ {
+            awk -F: -v 'bs_regex=\\\\\\\\' '/^# Files/,/^# Finished Make data base/ {
                 if ($1 == "# Not a target") skip = 1;
-                if ($1 !~ "^[#.\t]") { if (!skip) print $1; skip=0 }
+                if ($1 !~ "^[#.\t]" && !is_continuation ) {
+                    if (!skip) print $1;
+                    skip = 0
+                }
+                is_continuation = $0 ~ "^([^#]*[^#" bs_regex "])?(" bs_regex bs_regex ")*" bs_regex "$";
             }' 2>/dev/null
     else
-        # BSD make
-        make $makeflags -d g1 -rn >/dev/null 2>| awk -F, '/^#\*\*\* Input graph:/,/^$/ {if ($1 !~ "^#... ") {gsub(/# /,"",$1); print $1}}' 2>/dev/null
+        # FreeBSD/NetBSD
+        make $makeflags -V .ALLTARGETS 2>/dev/null | string split ' '
+        # OpenBSD
+        or make $makeflags -d g1 -rn 2>/dev/null | awk '/^[^#. \t].+:/ { gsub(/:.*/, "", $1); print $1 }'
     end
 end
 

@@ -1,38 +1,48 @@
-.. _cmd-fish_key_reader:
-
 fish_key_reader - explore what characters keyboard keys send
 ============================================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
     fish_key_reader [OPTIONS]
 
 Description
 -----------
 
-``fish_key_reader`` is used to study input received from the terminal and can help with key binds. The program is interactive and works on standard input. Individual characters themselves and their hexadecimal values are displayed.
-
-The tool will write an example :ref:`bind <cmd-bind>` command matching the character sequence captured to stdout. If the character sequence matches a special key name (see ``bind --key-names``),  both ``bind CHARS ...`` and ``bind -k KEYNAME ...`` usage will be shown. Additional details about the characters received, such as the delay between chars, are written to stderr.
+:program:`fish_key_reader` is used to explain how you would bind a certain key sequence. By default, it prints the :doc:`bind <bind>` command for one key sequence read interactively over standard input.
 
 The following options are available:
 
-- ``-c`` or ``--continuous`` begins a session where multiple key sequences can be inspected. By default the program exits after capturing a single key sequence.
+**-c** or **--continuous**
+    Begins a session where multiple key sequences can be inspected. By default the program exits after capturing a single key sequence.
 
-- ``-h`` or ``--help`` prints usage information.
+**-h** or **--help**
+    Displays help about using this command.
 
-- ``-v`` or ``--version`` prints fish_key_reader's version and exits.
+**-V** or **--verbose**
+    Explain what sequence was received in addition to the decoded key.
+
+**-v** or **--version**
+    Displays the current :program:`fish` version and then exits.
 
 Usage Notes
 -----------
 
-The delay in milliseconds since the previous character was received is included in the diagnostic information written to stderr. This information may be useful to determine the optimal ``fish_escape_delay_ms`` setting or learn the amount of lag introduced by tools like ``ssh``, ``mosh`` or ``tmux``.
-
 ``fish_key_reader`` intentionally disables handling of many signals. To terminate ``fish_key_reader`` in ``--continuous`` mode do:
 
-- press :kbd:`Control`\ +\ :kbd:`C` twice, or
-- press :kbd:`Control`\ +\ :kbd:`D` twice, or
+- press :kbd:`ctrl-c` twice, or
+- press :kbd:`ctrl-d` twice, or
 - type ``exit``, or
 - type ``quit``
+
+Example
+-------
+
+::
+
+   > fish_key_reader
+   Press a key:
+   # press up-arrow
+   bind up 'do something'

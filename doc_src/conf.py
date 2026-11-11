@@ -2,16 +2,27 @@
 #
 # Configuration file for the Sphinx documentation builder.
 #
-# This file does only contain a selection of the most common options. For a
-# full list see the documentation:
-# http://www.sphinx-doc.org/en/master/config
+# This file only contains a selection of the most common options. For a full
+# list see the documentation:
+# https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-import glob
+from glob import glob
 import os.path
-import pygments
 import subprocess
-from sphinx.errors import SphinxError, SphinxWarning
-from docutils import nodes, utils
+import sys
+from pathlib import Path
+from sphinx.highlighting import lexers
+from sphinx.errors import SphinxWarning
+from docutils import nodes
+
+try:
+    import sphinx_markdown_builder
+
+    extensions = [
+        "sphinx_markdown_builder",
+    ]
+except ImportError:
+    pass
 
 # -- Helper functions --------------------------------------------------------
 
@@ -20,7 +31,6 @@ from docutils import nodes, utils
 # Used like :issue:`2364`
 def issue_role(name, rawtext, text, lineno, inliner, options=None, content=None):
     options = options or {}
-    config = inliner.document.settings.env.app.config
     try:
         issue_num = int(text.strip())
         if issue_num <= 0:
@@ -36,47 +46,82 @@ def issue_role(name, rawtext, text, lineno, inliner, options=None, content=None)
     return [link], []
 
 
+def extract_sections(app, env):
+    if app.builder.name != "man":
+        return
+    output_file = app.config.fish_help_sections_output
+    if output_file == "":
+        return
+
+    import re
+
+    sections = []
+    for docname, info in env.tocs.items():
+        for node in info.traverse():
+            if not isinstance(node, nodes.reference):
+                continue
+            anchor = node["anchorname"]
+            if re.match(r"^#id\d+$", anchor):
+                continue
+            if anchor and docname.startswith("cmds/"):
+                continue
+            if anchor and docname == "relnotes":
+                continue
+            sections.append(docname + anchor)
+    sections.sort()
+    for section in sections:
+        assert re.match(r"[\w-]", section), (
+            f"Unsupported characters in section path: {section}"
+        )
+    help_sections = "".join(f"{section}\n" for section in sections)
+    Path(output_file).write_text(help_sections)
+
+
+def remove_fish_indent_lexer(app):
+    if app.builder.name in ("man", "markdown"):
+        del lexers["fish-docs-samples"]
+
+
 # -- Load our extensions -------------------------------------------------
 def setup(app):
-    # Our own pygments lexer
-    from sphinx.highlighting import lexers
-
+    # Our own pygments lexers
     this_dir = os.path.dirname(os.path.realpath(__file__))
-    fish_indent_lexer = pygments.lexers.load_lexer_from_file(
-        os.path.join(this_dir, "fish_indent_lexer.py"), lexername="FishIndentLexer"
-    )
-    lexers["fish-docs-samples"] = fish_indent_lexer
+    sys.path.insert(0, this_dir)
+    from fish_indent_lexer import FishIndentLexer
+    from fish_synopsis import FishSynopsisDirective, FishSynopsisLexer
+
+    lexers["fish-docs-samples"] = FishIndentLexer()
+    lexers["fish-synopsis"] = FishSynopsisLexer()
+    app.add_directive("synopsis", FishSynopsisDirective)
 
     app.add_config_value("issue_url", default=None, rebuild="html")
+    app.add_config_value(
+        "fish_help_sections_output",
+        default="",
+        rebuild="man",
+        types=str,
+    )
     app.add_role("issue", issue_role)
+
+    app.connect("builder-inited", remove_fish_indent_lexer)
+    app.connect("env-updated", extract_sections)
 
 
 # The default language to assume
 highlight_language = "fish-docs-samples"
 
-# -- Path setup --------------------------------------------------------------
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
-
-
 # -- Project information -----------------------------------------------------
 
 project = "fish-shell"
-copyright = "2021, fish-shell developers"
+copyright = "fish-shell developers"
 author = "fish-shell developers"
 issue_url = "https://github.com/fish-shell/fish-shell/issues"
 
-# Parsing FISH-BUILD-VERSION-FILE is possible but hard to ensure that it is in the right place
-# fish_indent is guaranteed to be on PATH for the Pygments highlighter anyway
+# From Cargo, or no build system.
 ret = subprocess.check_output(
-    ("fish_indent", "--version"), stderr=subprocess.STDOUT
+    ("../build_tools/git_version_gen.sh"), stderr=subprocess.STDOUT
 ).decode("utf-8")
+
 # The full version, including alpha/beta/rc tags
 release = ret.strip().split(" ")[-1]
 # The short X.Y version
@@ -85,26 +130,26 @@ version = release.rsplit(".", 1)[0]
 
 # -- General configuration ---------------------------------------------------
 
-# The suffix(es) of source filenames.
-# You can specify multiple suffix as a list of string:
-#
-# source_suffix = ['.rst', '.md']
-source_suffix = ".rst"
+# The suffix(es) and type(s) of source filenames.
+source_suffix = {".rst": "restructuredtext"}
 
 # The master toctree document.
 master_doc = "index"
 
-# The language for content autogenerated by Sphinx. Refer to documentation
-# for a list of supported languages.
+# The languages this uses, also used for content autogenerated by Sphinx.
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+#
+# It also sets the html lang= attribute which would be useful to e.g. screenreaders.
+# Currently we only have english.
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = []
+fish_exclude_patterns = "cmds/*.inc.rst"
+exclude_patterns = [fish_exclude_patterns]
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
@@ -118,6 +163,9 @@ pygments_style = None
 # of _static/pygments.css
 html_theme_path = ["."]
 html_theme = "python_docs_theme"
+
+# Shared styles across all doc versions.
+html_css_files = []
 
 # Don't add a weird "_sources" directory
 html_copy_source = False
@@ -138,11 +186,11 @@ html_sidebars = {"**": ["globaltoc.html", "searchbox.html", "localtoc.html"]}
 # The default font is "GNU FreeSans" or something which I've never heard of.
 # Make this something that might actually be installed.
 latex_elements = {
-    'fontpkg': r'''
+    "fontpkg": r"""
     \setmainfont{Noto Serif}
     \setsansfont{Noto Sans}
     \setmonofont{Noto Sans Mono}
-    ''',
+    """,
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
@@ -160,43 +208,51 @@ latex_documents = [
 
 # The default pdflatex doesn't handle unicode.
 # Switch to an engine that does (why pdflatex still exists and is still the default? I don't know)
-latex_engine = 'xelatex'
+latex_engine = "xelatex"
 
 # -- Options for manual page output ------------------------------------------
 
 
 def get_command_description(path, name):
-    """ Return the description for a command, by parsing its synopsis line """
-    with open(path) as fd:
-        for line in fd:
+    """Return the description for a command, by parsing its synopsis line"""
+    with open(path, encoding="utf8") as opened:
+        for line in opened:
             if line.startswith(name + " - "):
                 _, desc = line.split(" - ", 1)
                 return desc.strip()
+            elif line.startswith("``" + name + "`` - "):
+                _, desc = line.split("`` - ", 1)
+                return desc.strip("`")
     raise SphinxWarning("No description in file %s" % os.path.basename(path))
+
 
 # Newer sphinxen apparently create another subdirectory which breaks our man lookup.
 # Unbreak it (#7996)
 man_make_section_directory = False
 
+man_show_urls = True
+
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, "fish-doc", "fish-shell Documentation", [author], 1),
-    ("tutorial", "fish-tutorial", "fish-shell tutorial", [author], 1),
-    ("language", "fish-language", "The fish language", [author], 1),
-    ("interactive", "fish-interactive", "Using fish interactively", [author], 1),
-    ("relnotes", "fish-releasenotes", "fish-shell release notes", [author], 1),
-    ("completions", "fish-completions", "Writing fish completions", [author], 1),
+    (master_doc, "fish-doc", "", [author], 1),
+    ("tutorial", "fish-tutorial", "", [author], 1),
+    ("language", "fish-language", "", [author], 1),
+    ("interactive", "fish-interactive", "", [author], 1),
+    ("relnotes", "fish-releasenotes", "", [author], 1),
+    ("terminal-compatibility", "fish-terminal-compatibility", "", [author], 1),
+    ("completions", "fish-completions", "", [author], 1),
+    ("prompt", "fish-prompt-tutorial", "", [author], 1),
     (
         "fish_for_bash_users",
         "fish-for-bash-users",
-        "A quick fish primer for those coming from bash",
+        "",
         [author],
         1,
     ),
-    ("faq", "fish-faq", "fish-shell faq", [author], 1),
+    ("faq", "fish-faq", "", [author], 1),
 ]
-for path in sorted(glob.glob("cmds/*")):
+for path in sorted(set(glob("cmds/*.rst")) - set(glob(fish_exclude_patterns))):
     docname = os.path.splitext(path)[0]
     cmd = os.path.basename(docname)
     man_pages.append((docname, cmd, get_command_description(path, cmd), "", 1))
@@ -214,7 +270,7 @@ texinfo_documents = [
         "fish-shell Documentation",
         author,
         "fish-shell",
-        "One line description of project.",
+        "the friendly interactive shell",
         "Miscellaneous",
     )
 ]
@@ -237,7 +293,9 @@ epub_title = project
 # A list of files that should not be packed into the epub file.
 epub_exclude_files = ["search.html"]
 
-# Disable smart-quotes to prevent double dashes from becoming emdashes.
-smartquotes = False
+# Enable smart-quotes
+# default action is 'qDe': quotes, Dashes, ellipsis. Skip dashes for --options
+smartquotes = True
+smartquotes_action = "qe"
 
-linkcheck_ignore = [r'https://github.com/fish-shell/fish-shell/issues/\d+']
+linkcheck_ignore = [r"https://github.com/fish-shell/fish-shell/issues/\d+"]

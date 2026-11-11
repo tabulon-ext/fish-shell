@@ -1,8 +1,8 @@
 # fish completion for rbenv
 
 function __fish_rbenv_needs_command
-    set -l cmd (commandline -opc)
-    if [ (count $cmd) -eq 1 ]
+    set -l cmd (commandline -xpc)
+    if test (count $cmd) -eq 1
         return 0
     end
 
@@ -10,9 +10,9 @@ function __fish_rbenv_needs_command
 end
 
 function __fish_rbenv_using_command
-    set -l cmd (commandline -opc)
-    if [ (count $cmd) -gt 1 ]
-        if [ $argv[1] = $cmd[2] ]
+    set -l cmd (commandline -xpc)
+    if test (count $cmd) -gt 1
+        if test $argv[1] = $cmd[2]
             return 0
         end
     end
@@ -68,6 +68,10 @@ complete -f -c rbenv -n __fish_rbenv_needs_command -a init -d 'Configure the she
 ### install
 complete -f -c rbenv -n __fish_rbenv_needs_command -a install -d 'Install a Ruby version'
 complete -f -c rbenv -n '__fish_rbenv_using_command install' -a '(__fish_rbenv_official_rubies)'
+
+### uninstall
+complete -f -c rbenv -n __fish_rbenv_needs_command -a uninstall -d 'Uninstall a Ruby version'
+complete -f -c rbenv -n '__fish_rbenv_using_command uninstall' -a '(__fish_rbenv_installed_rubies)'
 
 ### local
 complete -f -c rbenv -n __fish_rbenv_needs_command -a local -d 'Set or show the local application-specific Ruby version'

@@ -1,4 +1,5 @@
-function down-or-search -d "Depending on cursor position and current mode, either search forward or move down one line"
+# localization: tier1
+function down-or-search -d "search forward or move down 1 line"
     # If we are already in search mode, continue
     if commandline --search-mode
         commandline -f history-search-forward
@@ -10,7 +11,6 @@ function down-or-search -d "Depending on cursor position and current mode, eithe
         commandline -f down-line
         return
     end
-
 
     # We are not already in search mode.
     # If we are on the bottom line, start search mode,

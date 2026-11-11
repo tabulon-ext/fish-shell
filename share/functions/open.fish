@@ -1,3 +1,4 @@
+# localization: tier1
 #
 # This allows us to use 'open FILENAME' to open a given file in the default
 # application for the file.
@@ -14,7 +15,7 @@ if not command -sq open
         end
 
         if not set -q argv[1]
-            printf (_ "%ls: Expected at least %d args, got only %d\n") open 1 0
+            printf (_ "%s: Expected at least %d args, got only %d\n") open 1 0 >&2
             return 1
         end
 
@@ -24,17 +25,10 @@ if not command -sq open
             end
         else if type -q -f xdg-open
             for i in $argv
-                # In the "generic" path where it doesn't use a helper utility,
-                # xdg-open fails to fork off, so it blocks the terminal.
-                xdg-open $i &
-                # Note: We *need* to pass $last_pid, or it will disown the last *existing* job.
-                # In case xdg-open forks, that would be whatever else the user has backgrounded.
-                #
-                # Yes, this has a (hopefully theoretical) race of the PID being recycled.
-                disown $last_pid 2>/dev/null
+                xdg-open $i
             end
         else
-            echo (_ 'No open utility found. Try installing "xdg-open" or "xdg-utils".')
+            echo (_ 'No open utility found. Try installing "xdg-open" or "xdg-utils".') >&2
         end
     end
 end

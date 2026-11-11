@@ -1,4 +1,5 @@
-# RUN: env fish_test_helper=%fish_test_helper %fish -C 'set -l fish %fish' %s
+# RUN: env fish_test_helper=%fish_test_helper fish=%fish %fish %s
+#REQUIRES: command -v %fish_test_helper
 
 $fish -c 'function main; exit 4; true; end; main'
 echo $status
@@ -72,4 +73,15 @@ echo "Now event handler should have run"
 # CHECK: PROCESS_EXIT 0
 # CHECK: JOB_EXIT 0
 # CHECK: Now event handler should have run
+
+begin
+    block --erase --local
+    # CHECKERR: block: Can not specify scope when removing block
+    block --erase --global
+    # CHECKERR: block: Can not specify scope when removing block
+    block --erase
+    # CHECKERR: block: No blocks defined
+end
+
+exit 0
 # CHECK: PROCESS_EXIT 0

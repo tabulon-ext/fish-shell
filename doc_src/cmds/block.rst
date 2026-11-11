@@ -1,39 +1,39 @@
-.. _cmd-block:
-
 block - temporarily block delivery of events
 ============================================
 
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    block [OPTIONS...]
-
+    block [(--local | --global)]
+    block --erase
 
 Description
 -----------
 
-``block`` prevents events triggered by ``fish`` or the :ref:`emit <cmd-emit>` command from being delivered and acted upon while the block is in place.
-
-In functions, ``block`` can be useful while performing work that should not be interrupted by the shell.
-
-The block can be removed. Any events which triggered while the block was in place will then be delivered.
+``block`` delays delivery of all events triggered by ``fish`` or the :doc:`emit <emit>`, thus delaying the execution of any function registered ``--on-event``, ``--on-process-exit``, ``--on-job-exit``, ``--on-variable`` and ``--on-signal`` until after the block is removed.
 
 Event blocks should not be confused with code blocks, which are created with ``begin``, ``if``, ``while`` or ``for``
 
-The following parameters are available:
+Without options, ``block`` sets up a block that is released automatically at the end of the current function scope.
 
-- ``-l`` or ``--local`` Release the block automatically at the end of the current innermost code block scope
+The following options are available:
 
-- ``-g`` or ``--global`` Never automatically release the lock
+**-l** or **--local**
+    Release the block automatically at the end of the current innermost code block scope.
 
-- ``-e`` or ``--erase`` Release global block
+**-g** or **--global**
+    Never automatically release the lock.
 
+**-e** or **--erase**
+    Release global block.
+
+**-h** or **--help**
+    Display help about using this command.
 
 Example
 -------
-
 ::
 
     # Create a function that listens for events
@@ -48,8 +48,7 @@ Example
     block -e
     # 'foo fired' will now be printed
 
-
 Notes
 -----
 
-Note that events are only received from the current fish process as there is no way to send events from one fish process to another.
+Events are only received from the current fish process as there is no way to send events from one fish process to another.

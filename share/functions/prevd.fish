@@ -1,3 +1,4 @@
+# localization: tier1
 function prevd --description "Move back in the directory history"
     set -l options h/help l/list
     argparse -n prevd --max-args=1 $options -- $argv
@@ -13,7 +14,7 @@ function prevd --description "Move back in the directory history"
         if test $argv[1] -ge 0 2>/dev/null
             set times $argv[1]
         else
-            printf (_ "%s: The number of positions to skip must be a non-negative integer\n") nextd
+            printf (_ "%s: The number of positions to skip must be a non-negative integer\n") prevd >&2
             return 1
         end
     end

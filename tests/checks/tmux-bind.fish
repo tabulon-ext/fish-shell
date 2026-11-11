@@ -1,36 +1,31 @@
-#RUN: %fish -C 'set -g fish %fish' %s
+#RUN: %fish %s
 #REQUIRES: command -v tmux
 
-set fish (builtin realpath $fish)
-
-# Isolated tmux.
-set -g tmpdir (mktemp -d)
-
-# Don't CD elsewhere, because tmux socket file is relative to CWD. Using
-# absolute path to socket file is prone to 'socket file name too long' error.
-cd $tmpdir
-
-set -g tmux tmux -S .tmux-socket -f /dev/null
-
-set -g sleep sleep .1
-set -q CI && set sleep sleep 1
-
-
-$tmux new-session -x 80 -y 10 -d $fish -C '
-    # This is similar to "tests/interactive.config".
-    function fish_greeting; end
-    function fish_prompt; printf "prompt $status_generation> "; end
-    # No autosuggestion from older history.
-    set fish_history ""
-'
-$sleep # Let fish draw a prompt.
+isolated-tmux-start
 
 # Test moving around with up-or-search on a multi-line commandline.
-$tmux send-keys 'echo 12' M-Enter 'echo ab' C-p 345 C-n cde
-$sleep
-$tmux capture-pane -p
+isolated-tmux send-keys 'echo 12' M-Enter 'echo ab' C-p 345 C-n cde
+tmux-sleep
+isolated-tmux capture-pane -p
 # CHECK: prompt 0> echo 12345
 # CHECK: echo abcde
 
-$tmux kill-server
-rm -r $tmpdir
+isolated-tmux send-keys C-c
+tmux-sleep
+isolated-tmux send-keys C-l
+isolated-tmux send-keys begin Enter 'echo 1' Enter e n d C-p 23
+tmux-sleep
+isolated-tmux capture-pane -p
+# CHECK: prompt 0> begin
+# CHECK: echo 123
+# CHECK: end
+
+# regression test
+isolated-tmux send-keys C-c # not sure why we need to wait after this
+tmux-sleep
+isolated-tmux send-keys 'bind S begin-selection' Enter C-l
+tmux-sleep
+isolated-tmux send-keys 'echo one two threeS' C-u C-y
+tmux-sleep
+isolated-tmux capture-pane -p
+# CHECK: prompt 1> echo one two three
